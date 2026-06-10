@@ -108,7 +108,12 @@ def create_router() -> APIRouter:
         html_path = Path(__file__).parent / "webui.html"
         if not html_path.exists():
             return JSONResponse(status_code=404, content={"error": "webui.html 不存在"})
-        return FileResponse(str(html_path), media_type="text/html")
+        # 禁止缓存，避免改版后浏览器仍跑旧页面
+        return FileResponse(
+            str(html_path),
+            media_type="text/html",
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"},
+        )
 
     # ---------- 总览 ----------
 
