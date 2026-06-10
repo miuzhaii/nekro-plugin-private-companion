@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>私人陪伴 - 控制面板</title>
+<style>
+:root {
+  --bg: #0e1014;
+  --surface: #171a21;
+  --surface-2: #1e222c;
+  --surface-3: #262b38;
+  --border: #2c3240;
+  --text: #e8eaf0;
+  --text-dim: #9aa3b5;
+  --text-faint: #6b7385;
+  --accent: #8b7cf6;
+  --accent-soft: rgba(139, 124, 246, 0.16);
+  --pink: #f47fb4;
+  --pink-soft: rgba(244, 127, 180, 0.14);
+  --green: #4ade80;
+  --green-soft: rgba(74, 222, 128, 0.14);
+  --red: #f87171;
+  --red-soft: rgba(248, 113, 113, 0.14);
+  --amber: #fbbf24;
+  --amber-soft: rgba(251, 191, 36, 0.14);
+  --radius: 14px;
+  --shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+.container { max-width: 1080px; margin: 0 auto; padding: 24px 20px 64px; }
+
+/* ===== 头部 ===== */
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 12px; margin-bottom: 20px;
+}
+.header h1 {
+  font-size: 22px; font-weight: 700;
+  background: linear-gradient(120deg, var(--pink), var(--accent));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.header .sub { font-size: 12px; color: var(--text-faint); margin-top: 2px; }
+.header-pills { display: flex; gap: 8px; }
+.pill {
+  font-size: 12px; padding: 4px 12px; border-radius: 999px;
+  border: 1px solid var(--border); color: var(--text-dim); background: var(--surface);
+}
+.pill.on { color: var(--green); border-color: rgba(74,222,128,.35); background: var(--green-soft); }
+.pill.off { color: var(--text-faint); }
+
+/* ===== 标签页 ===== */
+.tabs {
+  display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 5px; margin-bottom: 20px; overflow-x: auto;
+}
+.tab-btn {
+  flex: 1; min-width: 90px; padding: 9px 14px; border: none; border-radius: 10px;
+  background: transparent; color: var(--text-dim); font-size: 14px; cursor: pointer;
+  white-space: nowrap; transition: all .18s;
+}
+.tab-btn:hover { color: var(--text); background: var(--surface-2); }
+.tab-btn.active {
+  background: linear-gradient(120deg, rgba(244,127,180,.22), rgba(139,124,246,.22));
+  color: var(--text); font-weight: 600;
+}
+.tab-panel { display: none; }
+.tab-panel.active { display: block; animation: fadein .2s ease; }
+@keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
+
+/* ===== 卡片 ===== */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow);
+  margin-bottom: 16px;
+}
+.card h3 {
+  font-size: 13px; font-weight: 600; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px;
+}
+.grid { display: grid; gap: 16px; }
+.grid-2 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.big-value { font-size: 26px; font-weight: 700; }
+.muted { color: var(--text-faint); font-size: 13px; }
+.placeholder { color: var(--text-faint); font-size: 13px; font-style: italic; padding: 8px 0; }
+
+/* ===== 进度条 ===== */
+.bar { height: 8px; background: var(--surface-3); border-radius: 99px; overflow: hidden; margin-top: 6px; }
+.bar-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--pink), var(--accent)); transition: width .4s; }
+.bar-fill.green { background: linear-gradient(90deg, #34d399, #4ade80); }
+
+/* ===== chips ===== */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  font-size: 12px; padding: 3px 10px; border-radius: 999px;
+  background: var(--accent-soft); color: #c4baff; border: 1px solid rgba(139,124,246,.3);
+}
+.chip.pink { background: var(--pink-soft); color: #ffb3d4; border-color: rgba(244,127,180,.3); }
+.chip.amber { background: var(--amber-soft); color: var(--amber); border-color: rgba(251,191,36,.3); }
+
+/* ===== 按钮 ===== */
+.btn {
+  padding: 7px 16px; border-radius: 9px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text); font-size: 13px; cursor: pointer;
+  transition: all .15s;
+}
+.btn:hover:not(:disabled) { background: var(--surface-3); border-color: var(--accent); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn.primary { background: linear-gradient(120deg, var(--pink), var(--accent)); border: none; font-weight: 600; }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.1); }
+.btn.danger { color: var(--red); border-color: rgba(248,113,113,.35); }
+.btn.danger:hover:not(:disabled) { background: var(--red-soft); border-color: var(--red); }
+.btn.small { padding: 5px 12px; font-size: 12px; }
+.btn .spinner {
+  display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.3);
+  border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite;
+  vertical-align: -2px; margin-right: 6px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ===== 用户卡片 ===== */
+.user-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow); }
+.user-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.user-name { font-size: 16px; font-weight: 700; }
+.user-qq { font-size: 12px; color: var(--text-faint); margin-left: 8px; }
+.badge { font-size: 11px; padding: 2px 10px; border-radius: 999px; font-weight: 600; }
+.badge.ok { background: var(--green-soft); color: var(--green); }
+.badge.no { background: var(--surface-3); color: var(--text-faint); }
+.badge.off { background: var(--red-soft); color: var(--red); }
+.user-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px 18px; margin-bottom: 12px; }
+.meta-item .label { font-size: 11px; color: var(--text-faint); }
+.meta-item .value { font-size: 13px; }
+.user-actions { display: flex; flex-wrap: wrap; gap: 8px; border-top: 1px solid var(--border); padding-top: 12px; }
+.reason-line { font-size: 12px; color: var(--text-dim); margin-bottom: 12px; padding: 6px 10px; background: var(--surface-2); border-radius: 8px; }
+
+/* ===== 时间线 ===== */
+.timeline { position: relative; padding-left: 18px; }
+.timeline::before { content: ""; position: absolute; left: 5px; top: 6px; bottom: 6px; width: 2px; background: var(--border); }
+.tl-item { position: relative; padding: 6px 0 6px 12px; }
+.tl-item::before {
+  content: ""; position: absolute; left: -17px; top: 14px; width: 8px; height: 8px;
+  border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.tl-window { font-size: 12px; color: var(--pink); font-weight: 600; }
+.tl-activity { font-size: 14px; }
+.tl-mood { font-size: 12px; color: var(--text-faint); }
+
+/* ===== 日记 ===== */
+.diary-item { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
+.diary-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; cursor: pointer; background: var(--surface-2); }
+.diary-head:hover { background: var(--surface-3); }
+.diary-date { font-weight: 600; font-size: 14px; }
+.diary-arrow { color: var(--text-faint); font-size: 12px; transition: transform .2s; }
+.diary-item.open .diary-arrow { transform: rotate(90deg); }
+.diary-body { display: none; padding: 12px 14px; font-size: 13px; color: var(--text-dim); white-space: pre-wrap; border-top: 1px solid var(--border); }
+.diary-item.open .diary-body { display: block; }
+
+/* ===== 操作页 ===== */
+.op-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.op-row:last-child { border-bottom: none; }
+.op-desc { flex: 1; min-width: 200px; }
+.op-desc .name { font-size: 14px; font-weight: 600; }
+.op-desc .hint { font-size: 12px; color: var(--text-faint); }
+.op-result { font-size: 12px; min-width: 80px; }
+.op-result.ok { color: var(--green); }
+.op-result.err { color: var(--red); }
+textarea.preview {
+  width: 100%; min-height: 220px; resize: vertical; padding: 12px 14px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+  color: var(--text-dim); font-size: 13px; font-family: ui-monospace, Consolas, monospace;
+  line-height: 1.6;
+}
+textarea.preview:focus { outline: none; border-color: var(--accent); }
+
+/* ===== Toast ===== */
+#toast-box { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 99; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.toast {
+  padding: 10px 20px; border-radius: 10px; font-size: 13px; box-shadow: var(--shadow);
+  background: var(--surface-3); border: 1px solid var(--border); max-width: 90vw;
+  animation: toastin .25s ease;
+}
+.toast.ok { border-color: rgba(74,222,128,.4); color: var(--green); }
+.toast.err { border-color: rgba(248,113,113,.4); color: var(--red); }
+@keyframes toastin { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; } }
+
+.dream-box { background: var(--surface-2); border-radius: 10px; padding: 12px 14px; font-size: 13px; color: var(--text-dim); white-space: pre-wrap; }
+.refresh-hint { font-size: 11px; color: var(--text-faint); }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div>
+      <h1>私人陪伴 · 控制面板</h1>
+      <div class="sub">生活感与主动陪伴管理 <span class="refresh-hint" id="refresh-hint"></span></div>
+    </div>
+    <div class="header-pills">
+      <span class="pill" id="pill-proactive">主动陪伴 …</span>
+      <span class="pill" id="pill-inject">状态注入 …</span>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="overview">总览</button>
+    <button class="tab-btn" data-tab="users">陪伴对象</button>
+    <button class="tab-btn" data-tab="life">生活记录</button>
+    <button class="tab-btn" data-tab="ops">操作</button>
+  </div>
+
+  <!-- ===== 总览 ===== -->
+  <div class="tab-panel active" id="panel-overview">
+    <div class="grid grid-2">
+      <div class="card">
+        <h3>今日状态</h3>
+        <div class="big-value" id="ov-date">—</div>
+        <div style="margin-top:12px">
+          <div class="muted">能量 <span id="ov-energy-text"></span></div>
+          <div class="bar"><div class="bar-fill green" id="ov-energy-bar" style="width:0%"></div></div>
+        </div>
+        <div style="margin-top:12px">
+          <div class="muted">心情</div>
+          <div id="ov-mood">—</div>
+        </div>
+        <div style="margin-top:12px">
+          <div class="muted" style="margin-bottom:6px">身体状态</div>
+          <div class="chips" id="ov-conditions"><span class="placeholder">暂无</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>今日概括</h3>
+        <div id="ov-plan-summary" class="muted" style="font-size:14px;color:var(--text)">—</div>
+        <div style="margin-top:14px">
+          <div class="muted" style="margin-bottom:4px">梦境余韵</div>
+          <div id="ov-afterglow" style="font-size:13px;color:var(--text-dim)">—</div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>陪伴概况</h3>
+        <div class="user-meta">
+          <div class="meta-item"><div class="label">陪伴对象</div><div class="value big-value" id="ov-user-count" style="font-size:22px">—</div></div>
+          <div class="meta-item"><div class="label">最近日记</div><div class="value" id="ov-diary-date">—</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>今日 Token 消耗</h3>
+        <div class="user-meta">
+          <div class="meta-item"><div class="label">总量</div><div class="value big-value" id="ov-token-total" style="font-size:22px">—</div></div>
+          <div class="meta-item"><div class="label">调用次数</div><div class="value" id="ov-token-calls">—</div></div>
+        </div>
+        <div class="chips" id="ov-token-tasks" style="margin-top:8px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 陪伴对象 ===== -->
+  <div class="tab-panel" id="panel-users">
+    <div class="grid" id="users-list">
+      <div class="placeholder">加载中…</div>
+    </div>
+  </div>
+
+  <!-- ===== 生活记录 ===== -->
+  <div class="tab-panel" id="panel-life">
+    <div class="card">
+      <h3>今日日程</h3>
+      <div id="life-timeline"><div class="placeholder">暂无日程</div></div>
+    </div>
+    <div class="card">
+      <h3>梦境</h3>
+      <div id="life-dream"><div class="placeholder">暂无梦境记录</div></div>
+    </div>
+    <div class="card">
+      <h3>日记</h3>
+      <div id="life-diaries"><div class="placeholder">还没有日记</div></div>
+    </div>
+  </div>
+
+  <!-- ===== 操作 ===== -->
+  <div class="tab-panel" id="panel-ops">
+    <div class="card">
+      <h3>内容重生成</h3>
+      <div class="op-row">
+        <div class="op-desc"><div class="name">每日日程</div><div class="hint">重新生成今日时间块安排与概括</div></div>
+        <span class="op-result" id="re-plan-result"></span>
+        <button class="btn" id="re-plan" onclick="regen('plan')">重新生成日程</button>
+      </div>
+      <div class="op-row">
+        <div class="op-desc"><div class="name">当前状态</div><div class="hint">重新生成能量 / 心情 / 身体状态</div></div>
+        <span class="op-result" id="re-state-result"></span>
+        <button class="btn" id="re-state" onclick="regen('state')">重新生成状态</button>
+      </div>
+      <div class="op-row">
+        <div class="op-desc"><div class="name">梦境</div><div class="hint">重新生成今日梦境与余韵</div></div>
+        <span class="op-result" id="re-dream-result"></span>
+        <button class="btn" id="re-dream" onclick="regen('dream')">重新生成梦境</button>
+      </div>
+      <div class="op-row">
+        <div class="op-desc"><div class="name">今日日记</div><div class="hint">立即补写 / 重写当天日记</div></div>
+        <span class="op-result" id="re-diary-result"></span>
+        <button class="btn" id="re-diary" onclick="regen('diary')">生成今日日记</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>注入预览 <button class="btn small" id="btn-preview" onclick="loadInjectPreview()" style="float:right;margin-top:-4px">刷新预览</button></h3>
+      <textarea class="preview" id="inject-preview" readonly placeholder="点击「刷新预览」查看当前注入对话的生活状态文本"></textarea>
+    </div>
+  </div>
+
+</div>
+<div id="toast-box"></div>
+
+<script>
+"use strict";
+
+// ===== 基础工具 =====
+// 注意：页面挂载在 /plugins/xiaojiu.private_companion/ 下，API 必须用相对路径
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  let data;
+  try { data = await r.json(); } catch (e) { throw new Error("响应解析失败 (HTTP " + r.status + ")"); }
+  if (data && data.error) throw new Error(data.error);
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return data;
+}
+function post(path, body) {
+  return api(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+function esc(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function pad2(n) { return String(n).padStart(2, "0"); }
+function fmtTs(ts) {
+  if (!ts) return "—";
+  const d = new Date(Number(ts) * 1000);
+  if (isNaN(d.getTime())) return "—";
+  return pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) + " " + pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+}
+function toast(msg, type) {
+  const box = document.getElementById("toast-box");
+  const el = document.createElement("div");
+  el.className = "toast " + (type || "");
+  el.textContent = msg;
+  box.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+function setLoading(btn, loading, label) {
+  if (!btn) return;
+  btn.disabled = loading;
+  if (loading) {
+    btn.dataset.label = btn.textContent;
+    btn.innerHTML = '<span class="spinner"></span>' + esc(label || "处理中…");
+  } else {
+    btn.textContent = btn.dataset.label || btn.textContent;
+  }
+}
+
+// ===== 标签页 =====
+document.querySelectorAll(".tab-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+    document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById("panel-" + btn.dataset.tab).classList.add("active");
+    if (btn.dataset.tab === "life") loadLife();
+    if (btn.dataset.tab === "users") loadUsers();
+    if (btn.dataset.tab === "overview") loadOverview();
+  });
+});
+
+// ===== 总览 =====
+async function loadOverview() {
+  try {
+    const d = await api("api/overview");
+    document.getElementById("ov-date").textContent = d.date || "—";
+    document.getElementById("ov-mood").textContent = d.mood || "—";
+    document.getElementById("ov-plan-summary").textContent = d.plan_summary || "今日日程还未生成";
+    document.getElementById("ov-afterglow").textContent = d.dream_afterglow || "无";
+    document.getElementById("ov-user-count").textContent = d.target_user_count;
+    document.getElementById("ov-diary-date").textContent = d.latest_diary_date || "暂无";
+
+    // 能量：数字则画条，否则显示文本
+    const energyNum = parseFloat(d.current_energy);
+    const bar = document.getElementById("ov-energy-bar");
+    const txt = document.getElementById("ov-energy-text");
+    if (!isNaN(energyNum)) {
+      const pct = Math.max(0, Math.min(100, energyNum <= 1 ? energyNum * 100 : energyNum));
+      bar.style.width = pct + "%";
+      txt.textContent = Math.round(pct) + " / 100";
+    } else {
+      bar.style.width = "0%";
+      txt.textContent = d.current_energy || "—";
+    }
+
+    // 身体状态 chips
+    const condBox = document.getElementById("ov-conditions");
+    const conds = Array.isArray(d.conditions) ? d.conditions : [];
+    condBox.innerHTML = conds.length
+      ? conds.map((c) => '<span class="chip pink">' + esc(c.label || c) + (c.strength ? " · " + esc(c.strength) : "") + "</span>").join("")
+      : '<span class="placeholder">一切正常</span>';
+
+    // token
+    const usage = d.token_usage_today || {};
+    document.getElementById("ov-token-total").textContent = (usage.total || 0).toLocaleString();
+    document.getElementById("ov-token-calls").textContent = usage.calls || 0;
+    const byTask = usage.by_task || {};
+    document.getElementById("ov-token-tasks").innerHTML = Object.keys(byTask).length
+      ? Object.entries(byTask).map(([k, v]) => '<span class="chip">' + esc(k) + " " + Number(v).toLocaleString() + "</span>").join("")
+      : "";
+
+    // 顶部 pill
+    const pp = document.getElementById("pill-proactive");
+    pp.textContent = "主动陪伴 " + (d.proactive_enabled ? "开启" : "关闭");
+    pp.className = "pill " + (d.proactive_enabled ? "on" : "off");
+    const pi = document.getElementById("pill-inject");
+    pi.textContent = "状态注入 " + (d.inject_enabled ? "开启" : "关闭");
+    pi.className = "pill " + (d.inject_enabled ? "on" : "off");
+  } catch (e) {
+    toast("总览加载失败: " + e.message, "err");
+  }
+}
+
+// ===== 陪伴对象 =====
+function renderUserCard(u) {
+  const quotaMax = u.quota_max || 0;
+  const score = Math.max(0, Math.min(100, Number(u.relationship_score) || 0));
+  const statusBadge = !u.enabled
+    ? '<span class="badge off">已停用</span>'
+    : (u.should_send_now ? '<span class="badge ok">可主动</span>' : '<span class="badge no">暂不主动</span>');
+  return (
+    '<div class="user-card">' +
+      '<div class="user-head">' +
+        '<div><span class="user-name">' + esc(u.nickname || "未命名") + '</span><span class="user-qq">QQ ' + esc(u.user_id) + "</span></div>" +
+        statusBadge +
+      "</div>" +
+      '<div class="reason-line">' + esc(u.reason || (u.should_send_now ? "条件满足，可发起主动陪伴" : "—")) + "</div>" +
+      '<div style="margin-bottom:12px"><div class="muted">关系分 ' + score + ' / 100</div><div class="bar"><div class="bar-fill" style="width:' + score + '%"></div></div></div>' +
+      '<div class="user-meta">' +
+        '<div class="meta-item"><div class="label">今日配额</div><div class="value">' + (u.quota_used || 0) + " / " + quotaMax + "</div></div>" +
+        '<div class="meta-item"><div class="label">连续被忽视</div><div class="value">' + (u.ignored_streak || 0) + " 次</div></div>" +
+        '<div class="meta-item"><div class="label">最近主动</div><div class="value">' + fmtTs(u.last_sent_ts) + "</div></div>" +
+        '<div class="meta-item"><div class="label">最近话题</div><div class="value">' + esc(u.last_sent_topic || "—") + "</div></div>" +
+        '<div class="meta-item"><div class="label">用户最近发言</div><div class="value">' + fmtTs(u.last_user_msg_ts) + "</div></div>" +
+        '<div class="meta-item"><div class="label">累计 发送/回应</div><div class="value">' + (u.total_sent || 0) + " / " + (u.total_replied || 0) + "</div></div>" +
+      "</div>" +
+      '<div class="user-actions">' +
+        '<button class="btn small" onclick="userAction(\'' + esc(u.user_id) + "', '" + (u.enabled ? "disable" : "enable") + '\', this)">' + (u.enabled ? "停用" : "启用") + "</button>" +
+        '<button class="btn small" onclick="userAction(\'' + esc(u.user_id) + '\', \'reset_quota\', this)">重置配额</button>' +
+        '<button class="btn small" onclick="userAction(\'' + esc(u.user_id) + '\', \'reset_ignored\', this)">清零忽视</button>' +
+        '<button class="btn small primary" onclick="proactiveTest(\'' + esc(u.user_id) + '\', this)">立即主动</button>' +
+      "</div>" +
+    "</div>"
+  );
+}
+
+async function loadUsers() {
+  const box = document.getElementById("users-list");
+  try {
+    const users = await api("api/users");
+    if (!Array.isArray(users) || users.length === 0) {
+      box.innerHTML = '<div class="card"><div class="placeholder">尚未配置陪伴对象，请在插件配置中填写 TARGET_USER_IDS</div></div>';
+      return;
+    }
+    box.innerHTML = users.map(renderUserCard).join("");
+  } catch (e) {
+    box.innerHTML = '<div class="card"><div class="placeholder">加载失败: ' + esc(e.message) + "</div></div>";
+  }
+}
+
+async function userAction(userId, action, btn) {
+  setLoading(btn, true);
+  try {
+    await post("api/user/update", { user_id: userId, action: action });
+    toast("操作成功", "ok");
+  } catch (e) {
+    toast("操作失败: " + e.message, "err");
+  }
+  await loadUsers();
+}
+
+async function proactiveTest(userId, btn) {
+  if (!confirm("确定要立即对 " + userId + " 发起一次主动陪伴吗？\n（将占用今日配额并真实发送消息）")) return;
+  setLoading(btn, true, "触发中…");
+  try {
+    const r = await post("api/proactive/test", { user_id: userId });
+    const motive = typeof r.motivation === "string" ? r.motivation : JSON.stringify(r.motivation);
+    if (r.success) toast("已触发主动陪伴：" + (motive || "（无动机说明）"), "ok");
+    else toast("触发未成功：" + (motive || "未知原因"), "err");
+  } catch (e) {
+    toast("触发失败: " + e.message, "err");
+  }
+  await loadUsers();
+}
+
+// ===== 生活记录 =====
+async function loadLife() {
+  try {
+    const st = await api("api/bot-state");
+    // 日程时间线
+    const events = (st.plan && Array.isArray(st.plan.events)) ? st.plan.events : [];
+    document.getElementById("life-timeline").innerHTML = events.length
+      ? '<div class="timeline">' + events.map((ev) =>
+          '<div class="tl-item"><div class="tl-window">' + esc(ev.window || "?") + '</div>' +
+          '<div class="tl-activity">' + esc(ev.activity || "") + "</div>" +
+          (ev.mood ? '<div class="tl-mood">' + esc(ev.mood) + "</div>" : "") +
+          "</div>").join("") + "</div>"
+      : '<div class="placeholder">暂无日程，可在「操作」页重新生成</div>';
+
+    // 梦境
+    const dream = st.dream || {};
+    document.getElementById("life-dream").innerHTML = dream.content
+      ? '<div class="muted" style="margin-bottom:6px">' + esc(dream.date || "") + (dream.mood ? " · " + esc(dream.mood) : "") + "</div>" +
+        '<div class="dream-box">' + esc(dream.content) + "</div>" +
+        (dream.afterglow ? '<div class="muted" style="margin-top:8px">余韵：' + esc(dream.afterglow) + "</div>" : "")
+      : '<div class="placeholder">暂无梦境记录</div>';
+
+    // 日记（倒序，可展开）
+    const diaries = Array.isArray(st.diaries) ? st.diaries.slice().reverse() : [];
+    document.getElementById("life-diaries").innerHTML = diaries.length
+      ? diaries.map((d, i) =>
+          '<div class="diary-item" id="diary-' + i + '">' +
+            '<div class="diary-head" onclick="document.getElementById(\'diary-' + i + '\').classList.toggle(\'open\')">' +
+              '<span class="diary-date">' + esc(d.date || "未知日期") + "</span>" +
+              '<span class="diary-arrow">▶</span>' +
+            "</div>" +
+            '<div class="diary-body">' + esc(d.content || "（空）") + "</div>" +
+          "</div>").join("")
+      : '<div class="placeholder">还没有日记</div>';
+  } catch (e) {
+    toast("生活记录加载失败: " + e.message, "err");
+  }
+}
+
+// ===== 操作 =====
+const REGEN_NAMES = { plan: "日程", state: "状态", dream: "梦境", diary: "日记" };
+async function regen(target) {
+  const btn = document.getElementById("re-" + target);
+  const result = document.getElementById("re-" + target + "-result");
+  setLoading(btn, true, "生成中…");
+  result.textContent = "";
+  result.className = "op-result";
+  try {
+    const r = await post("api/state/regenerate", { target: target });
+    if (r.success) {
+      result.textContent = "生成成功";
+      result.classList.add("ok");
+      toast(REGEN_NAMES[target] + "已重新生成", "ok");
+    } else {
+      result.textContent = "生成失败（可能预算超限）";
+      result.classList.add("err");
+      toast(REGEN_NAMES[target] + "生成失败", "err");
+    }
+  } catch (e) {
+    result.textContent = "失败: " + e.message;
+    result.classList.add("err");
+    toast(REGEN_NAMES[target] + "生成失败: " + e.message, "err");
+  }
+  setLoading(btn, false);
+  loadOverview();
+  loadLife();
+}
+
+async function loadInjectPreview() {
+  const btn = document.getElementById("btn-preview");
+  const ta = document.getElementById("inject-preview");
+  setLoading(btn, true, "加载中…");
+  try {
+    const r = await api("api/inject-preview");
+    ta.value = r.text || "（注入文本为空）";
+  } catch (e) {
+    ta.value = "加载失败: " + e.message;
+  }
+  setLoading(btn, false);
+}
+
+// ===== 初始化与自动刷新 =====
+loadOverview();
+loadUsers();
+setInterval(() => {
+  loadOverview();
+  loadUsers();
+  document.getElementById("refresh-hint").textContent = "（更新于 " + fmtTs(Date.now() / 1000) + "）";
+}, 30000);
+</script>
+</body>
+</html>
