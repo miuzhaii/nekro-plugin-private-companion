@@ -322,8 +322,24 @@ textarea.preview:focus { outline: none; border-color: var(--accent); }
 
 // ===== 基础工具 =====
 // 注意：页面挂载在 /plugins/xiaojiu.private_companion/ 下，API 必须用相对路径
+// 鉴权：复用 Nekro WebUI 的登录态（localStorage 的 auth-storage 中的 JWT）
+function getNekroToken() {
+  try {
+    const raw = localStorage.getItem("auth-storage");
+    if (!raw) return "";
+    const parsed = JSON.parse(raw);
+    return (parsed && parsed.state && parsed.state.token) || "";
+  } catch (e) { return ""; }
+}
 async function api(path, opts) {
+  opts = opts || {};
+  opts.headers = opts.headers || {};
+  const token = getNekroToken();
+  if (token) opts.headers["Authorization"] = "Bearer " + token;
   const r = await fetch(path, opts);
+  if (r.status === 401 || r.status === 403) {
+    throw new Error("未登录或登录已过期：请先在同一浏览器登录 Nekro WebUI 后台（" + location.origin + "），再刷新本页");
+  }
   let data;
   try { data = await r.json(); } catch (e) { throw new Error("响应解析失败 (HTTP " + r.status + ")"); }
   if (data && data.error) throw new Error(data.error);

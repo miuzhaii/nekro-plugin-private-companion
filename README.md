@@ -58,6 +58,8 @@ docker restart nekro_agent
 
 启用插件后访问：`http://<nekro地址>:8021/plugins/xiaojiu.private_companion/`
 
+> 🔐 **鉴权**：面板 API 复用 nekro 主 WebUI 的管理员登录态（同一 JWT）。请先在**同一浏览器**登录 nekro 后台，再打开面板；未登录访问 API 一律返回 401。
+
 ## 🔧 与原版的差异
 
 - 仅保留：生活状态机、主动陪伴决策、WebUI；**不含**群聊观察、QQ空间、新闻探索、创作书柜、漫画阅读等外围功能

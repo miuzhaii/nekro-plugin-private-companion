@@ -73,9 +73,33 @@ def _disabled_response() -> Optional[JSONResponse]:
 # ========== 路由 ==========
 
 
+def _build_auth_dependencies() -> list:
+    """复用 nekro 主 WebUI 的 JWT 鉴权（管理员登录态）；鉴权模块不可用时失败关闭"""
+    try:
+        from fastapi import Depends
+        from nekro_agent.services.user.deps import get_current_active_user
+
+        return [Depends(get_current_active_user)]
+    except Exception as e:  # pragma: no cover
+        from nekro_agent.api.core import logger
+
+        logger.error(f"[private_companion] 鉴权依赖加载失败，API 将全部拒绝访问: {e!r}")
+
+        async def _deny():
+            from fastapi import HTTPException
+
+            raise HTTPException(status_code=503, detail="鉴权模块不可用")
+
+        from fastapi import Depends
+
+        return [Depends(_deny)]
+
+
 @plugin.mount_router()
 def create_router() -> APIRouter:
     router = APIRouter()
+    # API 子路由：全部要求 nekro 登录态（与主 WebUI 同一 JWT）；HTML 页面本身不拦（数据都在 API 里）
+    api_router = APIRouter(dependencies=_build_auth_dependencies())
 
     # ---------- WebUI 页面 ----------
 
@@ -88,7 +112,7 @@ def create_router() -> APIRouter:
 
     # ---------- 总览 ----------
 
-    @router.get("/api/overview", summary="面板总览")
+    @api_router.get("/api/overview", summary="面板总览")
     async def api_overview():
         resp = _disabled_response()
         if resp:
@@ -116,7 +140,7 @@ def create_router() -> APIRouter:
         except Exception as e:
             return {"error": str(e)}
 
-    @router.get("/api/bot-state", summary="完整生活状态")
+    @api_router.get("/api/bot-state", summary="完整生活状态")
     async def api_bot_state():
         resp = _disabled_response()
         if resp:
@@ -128,7 +152,7 @@ def create_router() -> APIRouter:
 
     # ---------- 陪伴对象 ----------
 
-    @router.get("/api/users", summary="陪伴对象列表")
+    @api_router.get("/api/users", summary="陪伴对象列表")
     async def api_users():
         resp = _disabled_response()
         if resp:
@@ -154,7 +178,7 @@ def create_router() -> APIRouter:
         except Exception as e:
             return {"error": str(e)}
 
-    @router.post("/api/user/update", summary="修改陪伴对象状态")
+    @api_router.post("/api/user/update", summary="修改陪伴对象状态")
     async def api_user_update(req: UserUpdateRequest):
         resp = _disabled_response()
         if resp:
@@ -179,7 +203,7 @@ def create_router() -> APIRouter:
 
     # ---------- 生成操作 ----------
 
-    @router.post("/api/state/regenerate", summary="重新生成生活内容")
+    @api_router.post("/api/state/regenerate", summary="重新生成生活内容")
     async def api_regenerate(req: RegenerateRequest):
         resp = _disabled_response()
         if resp:
@@ -199,7 +223,7 @@ def create_router() -> APIRouter:
         except Exception as e:
             return {"error": str(e)}
 
-    @router.post("/api/proactive/test", summary="立即触发主动陪伴")
+    @api_router.post("/api/proactive/test", summary="立即触发主动陪伴")
     async def api_proactive_test(req: ProactiveTestRequest):
         resp = _disabled_response()
         if resp:
@@ -215,7 +239,7 @@ def create_router() -> APIRouter:
 
     # ---------- 注入预览 / 日记 ----------
 
-    @router.get("/api/inject-preview", summary="生活状态注入预览")
+    @api_router.get("/api/inject-preview", summary="生活状态注入预览")
     async def api_inject_preview():
         resp = _disabled_response()
         if resp:
@@ -225,7 +249,7 @@ def create_router() -> APIRouter:
         except Exception as e:
             return {"error": str(e)}
 
-    @router.get("/api/diaries", summary="日记列表")
+    @api_router.get("/api/diaries", summary="日记列表")
     async def api_diaries():
         resp = _disabled_response()
         if resp:
@@ -236,4 +260,5 @@ def create_router() -> APIRouter:
         except Exception as e:
             return {"error": str(e)}
 
+    router.include_router(api_router)
     return router
