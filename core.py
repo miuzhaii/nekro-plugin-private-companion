@@ -151,8 +151,9 @@ async def get_persona_prompt() -> str:
     try:
         from nekro_agent.models.db_preset import DBPreset
 
-        if cfg.PERSONA_PRESET_ID:
-            preset = await DBPreset.get_or_none(id=cfg.PERSONA_PRESET_ID)
+        pid = str(cfg.PERSONA_PRESET_ID).strip()
+        if pid.isdigit():
+            preset = await DBPreset.get_or_none(id=int(pid))
             if preset and preset.content:
                 return str(preset.content)
         default_id = getattr(core_config, "AI_CHAT_DEFAULT_PRESET_ID", None)

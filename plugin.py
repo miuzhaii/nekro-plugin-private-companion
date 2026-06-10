@@ -36,10 +36,10 @@ class CompanionConfig(ConfigBase):
     )
 
     # ---------- 人设与模型 ----------
-    PERSONA_PRESET_ID: Optional[int] = Field(
-        default=None,
+    PERSONA_PRESET_ID: str = Field(
+        default="",
         title="陪伴人格（人设）",
-        description="生成日程/梦境/日记时使用的人设；为空则尝试使用系统默认人设的内容",
+        description="生成日程/梦境/日记时使用的人设 ID；为空则尝试使用系统默认人设的内容",
         json_schema_extra=ExtraField(ref_presets=True, ref_presets_no_default=True).model_dump(),
     )
     PERSONA_PROMPT: str = Field(
