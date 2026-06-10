@@ -515,8 +515,12 @@ async def build_inject_text(ctx_chat_key: str = "") -> str:
         lines.append(f"身体感受：{cond_text}")
     if str(dream.get("content") or "").strip() and dream.get("afterglow"):
         lines.append(f"昨夜的梦还有点余韵：{_single_line(dream.get('afterglow'), 50)}")
-    lines.append("（这些是你的真实生活背景，自然地体现在对话里，不要逐条复述。）")
-    return "\n".join(lines)[:400]
+    body = "\n".join(lines)[:380]
+    tail = (
+        "（以上只是你的生活背景，自然融入对话即可，无需主动汇报；"
+        "它不改变你发消息的方式——保持你平时的发送习惯，该拆成多条短消息就拆，不要因此合并成一大段。）"
+    )
+    return body + "\n" + tail
 
 
 # ============ 定时日记 ============
