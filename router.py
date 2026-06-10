@@ -135,12 +135,13 @@ def create_router() -> APIRouter:
             return resp
         try:
             cfg = get_config()
+            bot_state = await ensure_daily_state()
             users = []
             for uid in core.target_user_ids():
                 user_state = await core.get_user_state(uid)
                 ok, reason = False, ""
                 try:
-                    res = await _maybe_await(should_send(user_state))
+                    res = await _maybe_await(should_send(uid, user_state, bot_state))
                     ok, reason = _norm_should_send(res)
                 except Exception as e:  # noqa: PERF203
                     reason = f"判定失败: {e}"
@@ -205,11 +206,9 @@ def create_router() -> APIRouter:
             return resp
         try:
             user_state = await core.get_user_state(req.user_id)
-            try:
-                motivation = await _maybe_await(pick_motivation(user_state))
-            except TypeError:
-                motivation = await _maybe_await(pick_motivation(req.user_id))
-            success = await _maybe_await(trigger_proactive(req.user_id, motivation, manual=True))
+            bot_state = await ensure_daily_state()
+            motivation = await pick_motivation(req.user_id, user_state, bot_state)
+            success = await trigger_proactive(req.user_id, motivation, manual=True)
             return {"success": bool(success), "motivation": motivation}
         except Exception as e:
             return {"error": str(e)}
