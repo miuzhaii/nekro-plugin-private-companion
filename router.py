@@ -29,7 +29,9 @@ from .state import (
 
 class UserUpdateRequest(BaseModel):
     user_id: str = Field(..., description="陪伴对象 QQ")
-    action: str = Field(..., description="enable | disable | reset_quota | reset_ignored")
+    action: str = Field(..., description="enable | disable | reset_quota | reset_ignored | save_profile")
+    remark: str = Field("", description="后台备注名")
+    nickname: str = Field("", description="聊天称呼")
 
 
 class RegenerateRequest(BaseModel):
@@ -199,6 +201,9 @@ def create_router() -> APIRouter:
                 user_state["quota_used"] = 0
             elif req.action == "reset_ignored":
                 user_state["ignored_streak"] = 0
+            elif req.action == "save_profile":
+                user_state["remark"] = " ".join(str(req.remark or "").split())[:40]
+                user_state["nickname"] = " ".join(str(req.nickname or "").split())[:24]
             else:
                 return {"error": f"未知操作: {req.action}"}
             await core.save_user_state(req.user_id, user_state)

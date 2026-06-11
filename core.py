@@ -96,6 +96,7 @@ def default_user_state(user_id: str) -> dict:
         "user_id": str(user_id),
         "enabled": True,
         "nickname": "",
+        "remark": "",
         "quota_date": today_key(),
         "quota_used": 0,
         "last_sent_ts": 0.0,

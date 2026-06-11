@@ -239,19 +239,22 @@ async def pick_motivation(user_id: str, user_state: dict, bot_state: dict) -> di
 async def trigger_proactive(user_id: str, motivation: dict, manual: bool = False) -> bool:
     """组装唤醒事件描述并唤醒 agent；成功后更新用户状态。manual=True 不占配额"""
     bot_state = await core.get_bot_state()
-    desc = str(motivation.get("desc") or "想到对方了，看看 TA 在干嘛")
+    us = await core.get_user_state(user_id)
+    target_name = " ".join(str(us.get("nickname") or us.get("remark") or "").split())[:24]
+    target_label = target_name or "对方"
+    desc = str(motivation.get("desc") or "想到对方了，想看看对方在干嘛")
+    desc = desc.replace("TA", target_label)
     event_desc = (
-        f"【主动陪伴】你想主动找 TA 聊聊。动机：{desc}。"
+        f"【主动陪伴】你正在与{target_label}的私聊窗口里，想主动找{target_label}聊聊。动机：{desc}。"
         f"你当前的生活状态：{_one_line_state(bot_state)}。"
         "要求：像朋友一样自然地发起话题（1-2 句即可），结合你此刻的生活与心情，"
-        "不要提到这是定时任务或系统指令。"
+        "直接发送给当前私聊对象；不要写 @QQ号、不要写 @昵称、不要提到这是定时任务或系统指令。"
     )
     ok = await core.wake_agent_for_user(user_id, event_desc)
     if not ok:
         logger.warning(f"[private_companion] 主动唤醒失败 user={user_id} kind={motivation.get('kind')}")
         return False
 
-    us = await core.get_user_state(user_id)
     now = core.now_ts()
     if not manual:
         us["quota_used"] = int(us.get("quota_used", 0)) + 1
