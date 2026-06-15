@@ -23,7 +23,7 @@ plugin = NekroPlugin(
     description="让 bot 拥有连续的生活感（日程/状态/梦境/日记）并主动陪伴指定用户，附 WebUI 面板",
     version="0.1.0",
     author="xiaojiu",
-    url="https://github.com/miuzhaii/nekro-plugin-private-companion",
+    url="/plugins/xiaojiu.private_companion/",
 )
 
 
