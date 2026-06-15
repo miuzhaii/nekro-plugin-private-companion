@@ -58,6 +58,8 @@ docker restart nekro_agent
 
 启用插件后访问：`http://<nekro地址>:8021/plugins/xiaojiu.private_companion/`
 
+面板右上角有 **🔗 新标签打开** 按钮，点击后自动以当前地址在新标签打开，无需手动复制 URL。
+
 > 🔐 **鉴权**：面板 API 复用 nekro 主 WebUI 的管理员登录态（同一 JWT）。请先在**同一浏览器**登录 nekro 后台，再打开面板；未登录访问 API 一律返回 401。
 
 ## 🔧 与原版的差异
