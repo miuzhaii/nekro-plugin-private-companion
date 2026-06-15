@@ -127,7 +127,7 @@ class CompanionConfig(ConfigBase):
     )
     SELFIE_RETRIES: int = Field(default=1, title="自拍生成失败重试次数", ge=0, le=5)
     SELFIE_RETRY_DELAY_SECONDS: float = Field(default=2.0, title="自拍重试间隔（秒）", ge=0, le=30)
-    SELFIE_DAILY_LIMIT: int = Field(default=3, title="每日自拍生成上限", ge=0, le=24)
+    SELFIE_DAILY_LIMIT: int = Field(default=3, title="每日自拍生成上限", ge=0, le=100)
     SELFIE_CACHE_DAYS: int = Field(default=14, title="自拍缓存保留天数", ge=1, le=90)
     PERSONA_VISUAL_PROMPT: str = Field(
         default="",

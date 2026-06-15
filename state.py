@@ -9,7 +9,7 @@
 import asyncio
 import random
 import re
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Optional, Tuple
 
 from nekro_agent.api.core import logger
@@ -34,6 +34,51 @@ _after_daily_plan_hooks: list = []
 def register_after_daily_plan(fn) -> None:
     """注册日程生成完成后的回调（fn 接收 plan dict，async 或 sync 均可）"""
     _after_daily_plan_hooks.append(fn)
+
+
+# ============ 节假日工具 ============
+
+try:
+    import chinese_calendar as _cc
+    _CC_AVAILABLE = True
+except ImportError:
+    _cc = None
+    _CC_AVAILABLE = False
+
+_WEEKDAY_ZH = "一二三四五六日"
+
+
+def _get_day_context(dt: Optional[datetime] = None) -> str:
+    """返回如「2026-06-15 周一 工作日 14:30」或带节假日名的字符串"""
+    now = dt or datetime.now()
+    today = now.date()
+    wd = _WEEKDAY_ZH[now.weekday()]
+    time_str = now.strftime("%H:%M")
+    date_str = now.strftime("%Y-%m-%d")
+
+    if _CC_AVAILABLE and _cc is not None:
+        try:
+            is_holiday = _cc.is_holiday(today)
+            is_workday = _cc.is_workday(today)
+            detail = _cc.get_holiday_detail(today)
+            holiday_name = detail[1] if detail and detail[1] else None
+
+            if is_holiday and holiday_name and now.weekday() < 5:
+                day_type = f"法定节假日（{holiday_name}）"
+            elif is_holiday:
+                day_type = f"假日（{holiday_name}）" if holiday_name else "假日"
+            elif is_workday and now.weekday() >= 5:
+                day_type = "调休工作日"
+            elif is_workday:
+                day_type = "工作日"
+            else:
+                day_type = "周末"
+        except Exception:
+            day_type = "周末" if now.weekday() >= 5 else "工作日"
+    else:
+        day_type = "周末" if now.weekday() >= 5 else "工作日"
+
+    return f"{date_str} 周{wd} {day_type} {time_str}"
 
 # 防止并发触发重复的跨天生成
 _daily_lock = asyncio.Lock()
@@ -199,7 +244,7 @@ async def generate_daily_plan(force: bool = False) -> dict:
     prompt = f"""请为这个角色生成今天的生活日程。
 
 【今天的信息】
-日期：{today_key()}（星期{_weekday_text()}）
+日期：{_get_day_context()}
 {f'日程风格提示：{cfg.PLAN_STYLE_HINT}' if cfg.PLAN_STYLE_HINT.strip() else ''}
 {f'昨天日记摘要（顺势衔接，别照抄）：{diary_hint}' if diary_hint else ''}
 {f'今早醒来的情绪（让上午的节奏受它一点影响）：{dream_mood}' if dream_mood else ''}
@@ -514,6 +559,13 @@ async def build_inject_text(ctx_chat_key: str = "") -> str:
     dream = bot_state.get("dream", {})
 
     lines: List[str] = ["【你今天的生活】"]
+    lines.append(f"当前时间：{_get_day_context()}")
+    # 平台信息（从 chat_key 解析）
+    if ctx_chat_key:
+        if "private" in ctx_chat_key:
+            lines.append("对话场景：私聊")
+        elif "group" in ctx_chat_key:
+            lines.append("对话场景：群聊")
     summary = _single_line(plan.get("summary"), 60)
     if summary:
         lines.append(f"今天：{summary}")
