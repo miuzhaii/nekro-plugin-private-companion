@@ -1,14 +1,17 @@
 """命令处理与钩子：/陪伴 命令、生活状态注入、用户消息活动追踪、调度器启动"""
 
 import asyncio
+import base64
+from pathlib import Path
 from typing import Any
 
 from nekro_agent.adapters.onebot_v11.matchers.command import finish_with
 from nekro_agent.api.core import logger
+from nekro_agent.api.plugin import SandboxMethodType
 from nekro_agent.api.schemas import AgentCtx
 from nonebot import get_driver, on_command
 from nonebot.adapters import Bot
-from nonebot.adapters.onebot.v11 import Message, MessageEvent
+from nonebot.adapters.onebot.v11 import Message, MessageEvent, MessageSegment
 from nonebot.matcher import Matcher
 from nonebot.params import CommandArg
 
@@ -21,9 +24,46 @@ from .state import (
     ensure_daily_state,
     generate_daily_plan,
     generate_diary,
+    register_after_daily_plan,
+)
+from .visuals import (
+    build_selfie_capability_prompt,
+    get_or_generate_daily_schedule_selfies,
+    get_or_generate_schedule_selfie,
+    load_persona_visual_profile,
+    resolve_safe_image_path,
+    schedule_selfie_relative_path,
 )
 
 PRIVATE_CHAT_PREFIX = "onebot_v11-private_"
+
+
+async def _auto_generate_daily_selfies(plan: dict) -> None:
+    cfg = get_config()
+    if not (cfg.VISUALS_ENABLED and cfg.SELFIE_ENABLED):
+        return
+    try:
+        bot_state = await core.get_bot_state()
+        base_dir = _visuals_base_dir()
+        profile = _apply_config_defaults_to_visual_profile(load_persona_visual_profile(base_dir))
+        events = (plan.get("events") or [])[:cfg.SELFIE_DAILY_LIMIT]
+        await get_or_generate_daily_schedule_selfies(
+            base_dir,
+            events,
+            bot_state.get("state") or {},
+            profile,
+            date_key=core.today_key(),
+            generator=_generate_image_with_configured_provider,
+            retries=cfg.SELFIE_RETRIES,
+            retry_delay=cfg.SELFIE_RETRY_DELAY_SECONDS,
+            limit=cfg.SELFIE_DAILY_LIMIT,
+        )
+        logger.info(f"[private_companion] 日程图片预生成完毕，共 {len(events)} 张")
+    except Exception as e:
+        logger.warning(f"[private_companion] 日程图片预生成失败: {e!r}")
+
+
+register_after_daily_plan(_auto_generate_daily_selfies)
 
 HELP_TEXT = """🏠 私人陪伴 - 命令帮助
 ━━━━━━━━━━━━━━━
@@ -31,6 +71,8 @@ HELP_TEXT = """🏠 私人陪伴 - 命令帮助
 • /陪伴 日程 - 查看今日日程
 • /陪伴 梦境 - 查看今日梦境
 • /陪伴 日记 - 查看最近一篇日记
+• /陪伴 自拍 - 生成/发送当前日程自拍
+• /陪伴 人设图 - 查看当前人设参考图
 • /陪伴 主动 开|关 [QQ] - 开关主动陪伴（管 QQ 仅管理员）
 • /陪伴 判定 [QQ] - 调试：当前是否会主动及原因
 管理员专用：
@@ -71,7 +113,11 @@ async def _on_plugin_disabled():
 async def companion_life_state(_ctx: AgentCtx) -> str:
     """把今日日程/能量/心情/梦境余韵注入到对话提示词；失败不能影响对话"""
     try:
-        return await build_inject_text(getattr(_ctx, "chat_key", "") or "")
+        text = await build_inject_text(getattr(_ctx, "chat_key", "") or "")
+        cfg = get_config()
+        if cfg.VISUALS_ENABLED and cfg.SELFIE_ENABLED:
+            text += build_selfie_capability_prompt()
+        return text
     except Exception as e:
         logger.warning(f"[private_companion] 生活状态注入失败: {e!r}")
         return ""
@@ -126,6 +172,136 @@ def _fmt_conditions(state: dict) -> str:
         elif str(c).strip():
             items.append(str(c).strip())
     return "、".join(items) or "无"
+
+
+def _visuals_base_dir():
+    from pathlib import Path
+
+    return Path(str(plugin.get_plugin_data_dir()))
+
+
+def _apply_config_defaults_to_visual_profile(profile):
+    cfg = get_config()
+    if not profile.character_prompt.strip() and cfg.PERSONA_VISUAL_PROMPT.strip():
+        profile.character_prompt = cfg.PERSONA_VISUAL_PROMPT.strip()
+    if not profile.negative_prompt.strip() and cfg.PERSONA_NEGATIVE_PROMPT.strip():
+        profile.negative_prompt = cfg.PERSONA_NEGATIVE_PROMPT.strip()
+    return profile
+
+
+async def _send_schedule_selfie_to_chat(ctx: AgentCtx, chat_key: str, force: bool = False) -> dict:
+    cfg = get_config()
+    if not (cfg.VISUALS_ENABLED and cfg.SELFIE_ENABLED):
+        return {"success": False, "error": "视觉资产或日程自拍功能未启用"}
+    bot_state = await ensure_daily_state()
+    ev = current_plan_event(bot_state) or {}
+    if not ev:
+        return {"success": False, "error": "当前没有可用日程事件，暂时生成不了自拍"}
+
+    base_dir = _visuals_base_dir()
+    date_key = bot_state.get("date") or core.today_key()
+    cached_path = base_dir / schedule_selfie_relative_path(ev, date_key)
+    if force or not cached_path.exists():
+        ok, usage = await _check_and_increment_selfie_quota()
+        if not ok:
+            return {"success": False, "error": f"今日自拍生成额度已用完（{usage.get('count', 0)}/{cfg.SELFIE_DAILY_LIMIT}）"}
+    profile = _apply_config_defaults_to_visual_profile(load_persona_visual_profile(base_dir))
+    image_path = await get_or_generate_schedule_selfie(
+        base_dir,
+        ev,
+        bot_state.get("state") or {},
+        profile,
+        date_key=date_key,
+        generator=_generate_image_with_configured_provider,
+        hhmm=core.hhmm_now(),
+        force=force,
+        retries=cfg.SELFIE_RETRIES,
+        retry_delay=cfg.SELFIE_RETRY_DELAY_SECONDS,
+    )
+    sandbox_file = await ctx.fs.mixed_forward_file(str(image_path.resolve()))
+    await ctx.ms.send_image(chat_key, sandbox_file, ctx=ctx)
+    return {
+        "success": True,
+        "activity": ev.get("activity", "日常休息"),
+        "window": ev.get("window", ""),
+        "image": image_path.relative_to(base_dir).as_posix(),
+        "generated": force or not cached_path.exists(),
+    }
+
+
+@plugin.mount_sandbox_method(
+    SandboxMethodType.TOOL,
+    name="发送当前日程自拍",
+    description="把当前日程自拍发送到指定聊天。用户想看你、问你现在在做什么或要照片/自拍时使用。",
+)
+async def send_current_schedule_selfie(_ctx: AgentCtx, chat_key: str = "", force: bool = False) -> dict:
+    """发送当前日程自拍到聊天。
+
+    Args:
+        chat_key: 目标会话 key。通常传当前上下文的 chat_key；留空时使用当前会话。
+        force: 是否强制重拍。默认 False，会优先复用当前时段缓存；用户明确说“重拍/刷新”时才设 True。
+
+    Returns:
+        dict: success 为 True 表示图片已发送；False 时 error 为失败原因。
+    """
+    target_chat_key = str(chat_key or getattr(_ctx, "chat_key", "") or "").strip()
+    if not target_chat_key:
+        return {"success": False, "error": "缺少目标 chat_key，无法发送自拍"}
+    try:
+        return await _send_schedule_selfie_to_chat(_ctx, target_chat_key, force=bool(force))
+    except Exception as e:
+        logger.exception(f"[private_companion] agent 工具发送日程自拍失败: {e!r}")
+        return {"success": False, "error": str(e)[:160]}
+
+
+async def _generate_image_with_configured_provider(prompt: str, reference_image: tuple[Path, str] | None = None) -> str:
+    cfg = get_config()
+    group_name = str(cfg.SELFIE_MODEL_GROUP or "").strip()
+    if group_name:
+        from nekro_agent.core.config import config as global_config
+        from packages.magic_draw.utils import generate_image_via_chat
+
+        if group_name not in global_config.MODEL_GROUPS:
+            raise ValueError(f"未找到配置的绘图模型组: {group_name}")
+        reference_images = None
+        if reference_image is not None:
+            ref_path, ref_desc = reference_image
+            mime = "image/jpeg" if ref_path.suffix.lower() in {".jpg", ".jpeg"} else "image/webp" if ref_path.suffix.lower() == ".webp" else "image/png"
+            ref_b64 = base64.b64encode(ref_path.read_bytes()).decode("utf-8")
+            reference_images = [(f"data:{mime};base64,{ref_b64}", ref_desc)]
+        return await generate_image_via_chat(
+            global_config.MODEL_GROUPS[group_name],
+            prompt,
+            timeout=300,
+            reference_images=reference_images,
+            stream_mode=True,
+        )
+
+    from packages.z_img_draw.draw import generate_image
+
+    if reference_image is not None:
+        prompt = f"{reference_image[1]}\n\n{prompt}"
+    return await generate_image(prompt, aspect_ratio="1:1")
+
+
+async def _send_local_image(bot: Bot, event: MessageEvent, image_path) -> None:
+    from pathlib import Path
+
+    path = Path(image_path).resolve()
+    await bot.send(event, Message(MessageSegment.image(path.as_uri())))
+
+
+async def _check_and_increment_selfie_quota() -> tuple[bool, dict]:
+    key = f"visuals_selfie_usage_{core.today_key()}"
+    usage = await core.get_json(key, {"date": core.today_key(), "count": 0})
+    if not isinstance(usage, dict):
+        usage = {"date": core.today_key(), "count": 0}
+    limit = int(get_config().SELFIE_DAILY_LIMIT)
+    if int(usage.get("count", 0)) >= limit:
+        return False, usage
+    usage["count"] = int(usage.get("count", 0)) + 1
+    await core.set_json(key, usage)
+    return True, usage
 
 
 # ============ /陪伴 ============
@@ -239,6 +415,58 @@ async def handle_companion(matcher: Matcher, event: MessageEvent, bot: Bot, arg:
         else:
             date, content = "", str(d)
         await finish_with(matcher, message=f"📔 最近的日记（{date}）\n{content}")
+
+    # ---- 自拍 ----
+    elif action == "自拍":
+        if not (cfg.VISUALS_ENABLED and cfg.SELFIE_ENABLED):
+            await finish_with(matcher, message="❌ 视觉资产或日程自拍功能未启用，请先在插件配置中开启")
+        bot_state = await ensure_daily_state()
+        ev = current_plan_event(bot_state) or {}
+        if not ev:
+            await finish_with(matcher, message="📷 当前没有可用日程事件，暂时生成不了自拍")
+        await bot.send(event, "📷 我去拍一张当前日程自拍，稍等一下...")
+        try:
+            ok, usage = await _check_and_increment_selfie_quota()
+            if not ok:
+                await finish_with(matcher, message=f"❌ 今日自拍生成额度已用完（{usage.get('count', 0)}/{cfg.SELFIE_DAILY_LIMIT}）")
+            profile = load_persona_visual_profile(_visuals_base_dir())
+            if not profile.character_prompt.strip() and cfg.PERSONA_VISUAL_PROMPT.strip():
+                profile.character_prompt = cfg.PERSONA_VISUAL_PROMPT.strip()
+            if not profile.negative_prompt.strip() and cfg.PERSONA_NEGATIVE_PROMPT.strip():
+                profile.negative_prompt = cfg.PERSONA_NEGATIVE_PROMPT.strip()
+            image_path = await get_or_generate_schedule_selfie(
+                _visuals_base_dir(),
+                ev,
+                bot_state.get("state") or {},
+                profile,
+                date_key=bot_state.get("date") or core.today_key(),
+                generator=_generate_image_with_configured_provider,
+                hhmm=core.hhmm_now(),
+                force=(len(parts) > 1 and parts[1] in {"重拍", "刷新", "force"}),
+                retries=cfg.SELFIE_RETRIES,
+                retry_delay=cfg.SELFIE_RETRY_DELAY_SECONDS,
+            )
+            await bot.send(event, f"我刚在做：{ev.get('activity', '日常休息')}，给你看一眼。")
+            await _send_local_image(bot, event, image_path)
+            await finish_with(matcher, message="✅ 自拍已发送")
+        except Exception as e:
+            logger.exception(f"[private_companion] 自拍生成/发送失败: {e!r}")
+            await finish_with(matcher, message=f"❌ 自拍失败: {str(e)[:120]}")
+
+    # ---- 人设图 ----
+    elif action == "人设图":
+        if not cfg.VISUALS_ENABLED:
+            await finish_with(matcher, message="❌ 视觉资产功能未启用")
+        try:
+            profile = load_persona_visual_profile(_visuals_base_dir())
+            image_path = resolve_safe_image_path(_visuals_base_dir(), profile.reference_image)
+            if not image_path.exists():
+                await finish_with(matcher, message="📷 还没有上传人设参考图，请先在 WebUI 上传")
+            await bot.send(event, "📷 当前人设参考图：")
+            await _send_local_image(bot, event, image_path)
+            await finish_with(matcher, message="✅ 已发送")
+        except Exception as e:
+            await finish_with(matcher, message=f"❌ 人设图读取失败: {str(e)[:120]}")
 
     # ---- 生成日记 ----
     elif action == "生成日记":

@@ -15,12 +15,13 @@ from nekro_agent.core.core_utils import ExtraField
 from pydantic import Field
 
 MODEL_GROUP_REF = ExtraField(ref_model_groups=True, model_type="chat").model_dump()
+DRAW_MODEL_GROUP_REF = ExtraField(ref_model_groups=True, model_type="draw").model_dump()
 
 plugin = NekroPlugin(
     name="私人陪伴",
     module_name="private_companion",
     description="让 bot 拥有连续的生活感（日程/状态/梦境/日记）并主动陪伴指定用户，附 WebUI 面板",
-    version="0.1.1",
+    version="0.1.0",
     author="xiaojiu",
     url="https://github.com/miuzhaii/nekro-plugin-private-companion",
 )
@@ -114,6 +115,31 @@ class CompanionConfig(ConfigBase):
         description="用户连续不回复主动消息时，自动拉长主动间隔（最高 3 倍）",
     )
     SCHEDULER_TICK_SECONDS: int = Field(default=45, title="调度器轮询间隔（秒）", ge=15, le=300)
+
+    # ---------- 视觉资产 / 日程自拍 ----------
+    VISUALS_ENABLED: bool = Field(default=True, title="启用视觉资产管理")
+    SELFIE_ENABLED: bool = Field(default=False, title="启用日程自拍生成")
+    SELFIE_MODEL_GROUP: str = Field(
+        default="",
+        title="自拍图片模型组（绘图模型组，留空回退 z_img_draw）",
+        description="选择 Nekro 的绘图(draw)模型组；留空时回退使用 z_img_draw 插件配置",
+        json_schema_extra=DRAW_MODEL_GROUP_REF,
+    )
+    SELFIE_RETRIES: int = Field(default=1, title="自拍生成失败重试次数", ge=0, le=5)
+    SELFIE_RETRY_DELAY_SECONDS: float = Field(default=2.0, title="自拍重试间隔（秒）", ge=0, le=30)
+    SELFIE_DAILY_LIMIT: int = Field(default=3, title="每日自拍生成上限", ge=0, le=24)
+    SELFIE_CACHE_DAYS: int = Field(default=14, title="自拍缓存保留天数", ge=1, le=90)
+    PERSONA_VISUAL_PROMPT: str = Field(
+        default="",
+        title="默认人设外貌提示词",
+        description="WebUI 未单独保存 persona.json 时使用的默认外貌提示词",
+        json_schema_extra=ExtraField(is_textarea=True).model_dump(),
+    )
+    PERSONA_NEGATIVE_PROMPT: str = Field(
+        default="low quality, bad hands, extra fingers, blurry, watermark, text",
+        title="默认负面提示词",
+        json_schema_extra=ExtraField(is_textarea=True).model_dump(),
+    )
 
     # ---------- 预算与权限 ----------
     DAILY_TOKEN_LIMIT: int = Field(

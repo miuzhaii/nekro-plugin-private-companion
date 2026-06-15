@@ -178,6 +178,30 @@ textarea.preview {
   line-height: 1.6;
 }
 textarea.preview:focus { outline: none; border-color: var(--accent); }
+.input, textarea.input {
+  width: 100%; padding: 9px 11px; border-radius: 9px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); font-size: 13px; font-family: inherit;
+}
+textarea.input { min-height: 90px; resize: vertical; line-height: 1.55; }
+.input:focus, textarea.input:focus { outline: none; border-color: var(--accent); }
+.field { margin-bottom: 12px; }
+.field label { display:block; font-size:12px; color: var(--text-dim); margin-bottom: 5px; }
+.visual-preview { max-width: 100%; max-height: 360px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); object-fit: contain; }
+.visual-actions { display:flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.visual-meta { font-size: 12px; color: var(--text-faint); margin-top: 8px; word-break: break-all; }
+.visual-progress { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); display: none; }
+.visual-progress.show { display: block; }
+.visual-progress-line { display:flex; justify-content:space-between; gap:8px; font-size:12px; color: var(--text-dim); margin-bottom: 8px; }
+.visual-progress .bar { margin-top: 0; }
+.visual-progress.indeterminate .bar-fill { width: 35%; animation: progressSlide 1.2s ease-in-out infinite; }
+.schedule-selfie-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; margin-top: 10px; }
+.schedule-selfie-card { border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); padding: 10px; }
+.schedule-selfie-card .time { font-weight: 700; margin-bottom: 6px; }
+.schedule-selfie-card .activity { font-size: 12px; color: var(--text-dim); line-height: 1.5; margin-bottom: 8px; }
+.schedule-selfie-card .mood { font-size: 11px; color: var(--text-faint); margin-bottom: 8px; }
+.schedule-selfie-imgbox { min-height: 150px; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius: 10px; background: var(--bg); }
+.schedule-selfie-imgbox img { width:100%; max-height:220px; object-fit:cover; border-radius: 10px; }
+@keyframes progressSlide { 0% { transform: translateX(-120%); } 50% { transform: translateX(90%); } 100% { transform: translateX(260%); } }
 
 /* ===== Toast ===== */
 #toast-box { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 99; display: flex; flex-direction: column; gap: 8px; align-items: center; }
@@ -212,6 +236,7 @@ textarea.preview:focus { outline: none; border-color: var(--accent); }
     <button class="tab-btn active" data-tab="overview">总览</button>
     <button class="tab-btn" data-tab="users">陪伴对象</button>
     <button class="tab-btn" data-tab="life">生活记录</button>
+    <button class="tab-btn" data-tab="visuals">视觉资产</button>
     <button class="tab-btn" data-tab="ops">操作</button>
   </div>
 
@@ -280,6 +305,46 @@ textarea.preview:focus { outline: none; border-color: var(--accent); }
     <div class="card">
       <h3>日记</h3>
       <div id="life-diaries"><div class="placeholder">还没有日记</div></div>
+    </div>
+  </div>
+
+  <!-- ===== 视觉资产 ===== -->
+  <div class="tab-panel" id="panel-visuals">
+    <div class="grid grid-2">
+      <div class="card">
+        <h3>人设参考图</h3>
+        <div id="visual-persona-preview"><div class="placeholder">还没有上传人设图</div></div>
+        <div class="visual-actions">
+          <input type="file" id="persona-file" accept="image/png,image/jpeg,image/webp" class="input">
+          <button class="btn primary" id="btn-upload-persona" onclick="uploadPersonaImage()">上传/替换人设图</button>
+        </div>
+        <div class="visual-meta" id="visual-persona-meta"></div>
+      </div>
+      <div class="card">
+        <h3>日程自拍预览</h3>
+        <div class="visual-actions">
+          <button class="btn primary" id="btn-generate-selfie" onclick="generateDaySelfies(false)">生成/读取今日全部自拍</button>
+          <button class="btn" id="btn-regenerate-selfie" onclick="generateDaySelfies(true)">强制重拍全部</button>
+          <button class="btn" onclick="loadScheduleSelfies()">刷新列表</button>
+        </div>
+        <div class="visual-progress" id="visual-selfie-progress">
+          <div class="visual-progress-line"><span id="visual-selfie-progress-text">等待开始</span><span id="visual-selfie-progress-time">0s</span></div>
+          <div class="bar"><div class="bar-fill" id="visual-selfie-progress-bar" style="width:0%"></div></div>
+        </div>
+        <div class="visual-meta" id="visual-selfie-meta">每个日程时间段会对应一张日常自拍；需要开启 SELFIE_ENABLED。</div>
+        <div id="visual-selfie-preview" class="schedule-selfie-grid"><div class="placeholder">正在加载日程自拍状态…</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>视觉提示词</h3>
+      <div class="field"><label>角色外貌提示词</label><textarea class="input" id="visual-character" placeholder="白发少女，蓝灰色眼睛，日常居家风..."></textarea></div>
+      <div class="field"><label>画风提示词</label><textarea class="input" id="visual-style" placeholder="anime illustration, soft light, casual selfie..."></textarea></div>
+      <div class="field"><label>负面提示词</label><textarea class="input" id="visual-negative" placeholder="low quality, bad hands..."></textarea></div>
+      <div class="field"><label>Seed / 一致性提示（可选）</label><input class="input" id="visual-seed" placeholder="optional"></div>
+      <div class="visual-actions">
+        <button class="btn primary" id="btn-save-visual-profile" onclick="saveVisualProfile()">保存视觉人设</button>
+        <button class="btn" onclick="loadVisuals()">刷新</button>
+      </div>
     </div>
   </div>
 
@@ -353,6 +418,17 @@ function post(path, body) {
     body: JSON.stringify(body),
   });
 }
+async function postForm(path, formData) {
+  const headers = {};
+  const token = getNekroToken();
+  if (token) headers["Authorization"] = "Bearer " + token;
+  const r = await fetch(path, { method: "POST", headers, body: formData });
+  let data;
+  try { data = await r.json(); } catch (e) { throw new Error("响应解析失败 (HTTP " + r.status + ")"); }
+  if (data && (data.error || data.detail)) throw new Error(data.error || data.detail);
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return data;
+}
 function esc(s) {
   return String(s == null ? "" : s)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -393,6 +469,7 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
     document.getElementById("panel-" + btn.dataset.tab).classList.add("active");
     if (btn.dataset.tab === "life") loadLife();
     if (btn.dataset.tab === "users") loadUsers();
+    if (btn.dataset.tab === "visuals") loadVisuals();
     if (btn.dataset.tab === "overview") loadOverview();
   });
 });
@@ -600,6 +677,182 @@ async function loadLife() {
   } catch (e) {
     toast("生活记录加载失败: " + e.message, "err");
   }
+}
+
+// ===== 视觉资产 =====
+async function renderVisualImage(boxId, relPath, placeholder) {
+  const box = document.getElementById(boxId);
+  if (!relPath) {
+    box.innerHTML = '<div class="placeholder">❌ ' + esc(placeholder || "暂无图片") + '</div>';
+    return false;
+  }
+  box.innerHTML = '<div class="placeholder">正在加载图片预览…</div>';
+  try {
+    const headers = {};
+    const token = getNekroToken();
+    if (token) headers["Authorization"] = "Bearer " + token;
+    const r = await fetch("api/visuals/image/" + encodeURI(relPath) + "?t=" + Date.now(), { headers });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    box.innerHTML = '<img class="visual-preview" src="' + url + '" alt="visual image">';
+    return true;
+  } catch (e) {
+    box.innerHTML = '<div class="placeholder">⚠️ 图片存在但预览加载失败：' + esc(e.message) + '</div>';
+    return false;
+  }
+}
+
+function setPersonaStatus(profile, previewOk) {
+  const meta = document.getElementById("visual-persona-meta");
+  if (!profile || !profile.reference_image || !profile.image_sha256) {
+    meta.textContent = "状态：未上传人设参考图";
+    return;
+  }
+  meta.textContent = "状态：已上传" + (previewOk ? "，预览正常" : "，但预览未加载") + " · 路径：" + profile.reference_image + " · sha256：" + (profile.image_sha256 || "—");
+}
+
+async function loadVisuals() {
+  try {
+    const p = await api("api/visuals/profile");
+    document.getElementById("visual-character").value = p.character_prompt || "";
+    document.getElementById("visual-style").value = p.style_prompt || "";
+    document.getElementById("visual-negative").value = p.negative_prompt || "";
+    document.getElementById("visual-seed").value = p.seed_hint || "";
+    const hasImage = !!(p.reference_image && p.image_sha256);
+    const previewOk = hasImage ? await renderVisualImage("visual-persona-preview", p.reference_image, "还没有上传人设图") : false;
+    if (!hasImage) await renderVisualImage("visual-persona-preview", "", "还没有上传人设图");
+    setPersonaStatus(p, previewOk);
+    await loadScheduleSelfies();
+  } catch (e) {
+    toast("视觉人设加载失败: " + e.message, "err");
+  }
+}
+
+async function saveVisualProfile() {
+  const btn = document.getElementById("btn-save-visual-profile");
+  setLoading(btn, true, "保存中…");
+  try {
+    await post("api/visuals/profile", {
+      character_prompt: document.getElementById("visual-character").value || "",
+      style_prompt: document.getElementById("visual-style").value || "",
+      negative_prompt: document.getElementById("visual-negative").value || "",
+      seed_hint: document.getElementById("visual-seed").value || "",
+    });
+    toast("视觉人设已保存", "ok");
+    await loadVisuals();
+  } catch (e) {
+    toast("保存失败: " + e.message, "err");
+  }
+  setLoading(btn, false);
+}
+
+async function uploadPersonaImage() {
+  const btn = document.getElementById("btn-upload-persona");
+  const file = document.getElementById("persona-file").files[0];
+  if (!file) { toast("请选择图片文件", "err"); return; }
+  setLoading(btn, true, "上传中…");
+  try {
+    const fd = new FormData();
+    fd.append("file", file);
+    await postForm("api/visuals/persona-image", fd);
+    toast("人设图已上传", "ok");
+    await loadVisuals();
+  } catch (e) {
+    toast("上传失败: " + e.message, "err");
+  }
+  setLoading(btn, false);
+}
+
+let selfieProgressTimer = null;
+function setSelfieProgress(status, pct, startedAt, done) {
+  const box = document.getElementById("visual-selfie-progress");
+  const text = document.getElementById("visual-selfie-progress-text");
+  const time = document.getElementById("visual-selfie-progress-time");
+  const bar = document.getElementById("visual-selfie-progress-bar");
+  box.classList.add("show");
+  box.classList.toggle("indeterminate", !done && pct == null);
+  text.textContent = status || "生成中…";
+  if (pct != null) bar.style.width = Math.max(0, Math.min(100, pct)) + "%";
+  const sec = startedAt ? Math.floor((Date.now() - startedAt) / 1000) : 0;
+  time.textContent = sec + "s";
+}
+function stopSelfieProgress() {
+  if (selfieProgressTimer) clearInterval(selfieProgressTimer);
+  selfieProgressTimer = null;
+}
+
+async function renderScheduleSelfies(items) {
+  const box = document.getElementById("visual-selfie-preview");
+  if (!items || !items.length) {
+    box.innerHTML = '<div class="placeholder">暂无今日日程，所以还没有自拍槽位</div>';
+    return;
+  }
+  box.innerHTML = items.map((it) => {
+    const status = it.exists ? "已生成" : "未生成";
+    return '<div class="schedule-selfie-card">' +
+      '<div class="time">' + esc(it.window || "未知时间") + ' · ' + status + '</div>' +
+      '<div class="activity">' + esc(it.activity || "日常活动") + '</div>' +
+      '<div class="mood">' + esc(it.mood || "") + '</div>' +
+      '<div class="schedule-selfie-imgbox" id="schedule-selfie-img-' + it.index + '">' +
+        (it.exists ? '正在加载预览…' : '还没拍这一段') +
+      '</div>' +
+    '</div>';
+  }).join("");
+  for (const it of items) {
+    if (!it.exists || !it.image) continue;
+    await renderVisualImage("schedule-selfie-img-" + it.index, it.image, "还没拍这一段");
+  }
+}
+
+async function loadScheduleSelfies() {
+  try {
+    const r = await api("api/visuals/schedule-selfies");
+    await renderScheduleSelfies(r.items || []);
+    document.getElementById("visual-selfie-meta").textContent = "日期：" + (r.date || "—") + " · 已生成：" + (r.generated || 0) + "/" + (r.total || 0) + " 张";
+  } catch (e) {
+    document.getElementById("visual-selfie-preview").innerHTML = '<div class="placeholder">加载失败：' + esc(e.message) + '</div>';
+  }
+}
+
+async function generateDaySelfies(force) {
+  const btn = document.getElementById(force ? "btn-regenerate-selfie" : "btn-generate-selfie");
+  const otherBtn = document.getElementById(force ? "btn-generate-selfie" : "btn-regenerate-selfie");
+  const startedAt = Date.now();
+  stopSelfieProgress();
+  setSelfieProgress(force ? "已提交重拍全部日程自拍，正在逐段调用绘图模型…" : "已提交今日全部日程自拍，正在检查缓存/逐段生成…", 5, startedAt, false);
+  document.getElementById("visual-selfie-meta").textContent = "生成中：会按今日日程每个时间段生成一张，可能需要比较久，请不要重复点击。";
+  setLoading(btn, true, force ? "重拍全部中…" : "生成全部中…");
+  if (otherBtn) otherBtn.disabled = true;
+  let tick = 0;
+  selfieProgressTimer = setInterval(() => {
+    tick += 1;
+    const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+    const hints = [
+      "正在读取今日日程并构建每段自拍提示词…",
+      "正在逐个时间段生成日常照片…",
+      "还在生成中，多时间段会比单张更慢…",
+      "正在等待剩余图片结果，请继续稍等…",
+    ];
+    const pct = Math.min(94, 8 + tick * 2);
+    setSelfieProgress(hints[Math.min(hints.length - 1, Math.floor(elapsed / 30))], pct, startedAt, false);
+  }, 1000);
+  try {
+    const r = await post("api/visuals/generate-day?force=" + (force ? "true" : "false"), {});
+    stopSelfieProgress();
+    setSelfieProgress("全部日程自拍处理完成，正在展示预览", 100, startedAt, true);
+    await renderScheduleSelfies(r.items || []);
+    const sec = Math.floor((Date.now() - startedAt) / 1000);
+    document.getElementById("visual-selfie-meta").textContent = "日期：" + (r.date || "—") + " · 已生成：" + (r.generated || 0) + "/" + (r.total || 0) + " 张 · 用时：" + sec + "s";
+    toast("今日全部日程自拍已处理，用时 " + sec + "s", "ok");
+  } catch (e) {
+    stopSelfieProgress();
+    setSelfieProgress("生成失败：" + e.message, 100, startedAt, true);
+    document.getElementById("visual-selfie-meta").textContent = "生成失败：" + e.message;
+    toast("生成日程自拍失败: " + e.message, "err");
+  }
+  setLoading(btn, false);
+  if (otherBtn) otherBtn.disabled = false;
 }
 
 // ===== 操作 =====

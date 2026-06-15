@@ -28,6 +28,13 @@ from .core import (
 )
 from .plugin import get_config, plugin
 
+_after_daily_plan_hooks: list = []
+
+
+def register_after_daily_plan(fn) -> None:
+    """注册日程生成完成后的回调（fn 接收 plan dict，async 或 sync 均可）"""
+    _after_daily_plan_hooks.append(fn)
+
 # 防止并发触发重复的跨天生成
 _daily_lock = asyncio.Lock()
 
@@ -239,6 +246,13 @@ async def generate_daily_plan(force: bool = False) -> dict:
     bot_state = await get_bot_state()
     bot_state["plan"] = plan
     await save_bot_state(bot_state)
+    for hook in list(_after_daily_plan_hooks):
+        try:
+            result = hook(plan)
+            if hasattr(result, "__await__"):
+                asyncio.ensure_future(result)
+        except Exception as e:
+            logger.warning(f"[private_companion] after_daily_plan hook 失败: {e!r}")
     return plan
 
 
