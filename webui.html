@@ -229,6 +229,7 @@ textarea.input { min-height: 90px; resize: vertical; line-height: 1.55; }
     <div class="header-pills">
       <span class="pill" id="pill-proactive">主动陪伴 …</span>
       <span class="pill" id="pill-inject">状态注入 …</span>
+      <a class="pill" id="pill-open" href="#" target="_blank" style="text-decoration:none;cursor:pointer;" title="在新标签打开面板">🔗 新标签打开</a>
     </div>
   </div>
 
@@ -899,6 +900,7 @@ async function loadInjectPreview() {
 
 // ===== 初始化与自动刷新 =====
 loadOverview();
+document.getElementById("pill-open").href = window.location.href;
 loadUsers();
 setInterval(() => {
   loadOverview();
