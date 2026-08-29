@@ -102,15 +102,21 @@ def _event_rows(events: list, current_window: str) -> str:
         cls = "event current" if is_current else "event"
         marker = " data-current='1'" if is_current else ""
         last = " last" if i == n - 1 else ""
+        side = "left" if i % 2 == 0 else "right"
         mood_html = f"<span class='mood'>{mood}</span>" if mood else ""
-        rows.append(
-            f"<div class='slot{last}'>"
-            f"<div class='rail'><span class='dot'></span></div>"
+        card = (
             f"<div class='{cls}'{marker} style='--tone:{tone['main']};--tone-bg:{tone['light']}'>"
             f"<span class='window'>{escape_html(window)}</span>"
             f"<span class='activity'>{activity}</span>"
             f"{mood_html}"
-            f"</div></div>"
+            f"</div>"
+        )
+        if side == "left":
+            body = f"{card}<div class='gutter'><span class='dot'></span></div><div class='pad'></div>"
+        else:
+            body = f"<div class='pad'></div><div class='gutter'><span class='dot'></span></div>{card}"
+        rows.append(
+            f"<div class='slot {side}{last}' style='--tone:{tone['main']};--tone-bg:{tone['light']}'>{body}</div>"
         )
     return "".join(rows)
 
@@ -185,16 +191,21 @@ body{{margin:0;background:#0f1020;font-family:-apple-system,BlinkMacSystemFont,'
 .setting{{font-weight:500;font-size:13px;color:#8a6a48}}
 .life-blurbs{{margin-top:8px;display:flex;flex-wrap:wrap;gap:8px}}
 .blurb{{font-size:12px;padding:2px 10px;border-radius:999px;background:#fff;color:#7a5a38;font-weight:600}}
-.timeline{{display:flex;flex-direction:column;margin-top:16px}}
-.slot{{display:flex;gap:12px;align-items:stretch}}
-.rail{{width:18px;position:relative;flex-shrink:0}}
-.rail:before{{content:'';position:absolute;left:8px;top:22px;bottom:-6px;width:2px;background:linear-gradient(#d9d0ee,#ece6f5)}}
-.slot.last .rail:before{{display:none}}
-.dot{{position:absolute;left:3px;top:18px;width:12px;height:12px;border-radius:999px;background:var(--tone,#6a4bbd);border:2px solid #fff;box-shadow:0 0 0 2px color-mix(in srgb, var(--tone,#6a4bbd) 35%, white)}}
-.event{{flex:1;margin-bottom:10px;background:var(--tone-bg,#fff);border:1px solid color-mix(in srgb, var(--tone,#6a4bbd) 28%, #ece6f5);border-left:5px solid var(--tone,#6a4bbd);border-radius:16px;padding:12px 14px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}}
+.timeline{{position:relative;margin-top:8px;padding:6px 0 10px}}
+.timeline:before{{content:'';position:absolute;left:50%;top:8px;bottom:8px;width:2px;margin-left:-1px;background:linear-gradient(#d4c8ee,#cbb8e8 50%,#e8e0f6);border-radius:2px}}
+.axis{{display:none}}
+.slot{{display:grid;grid-template-columns:1fr 22px 1fr;column-gap:8px;align-items:start}}
+.slot.left{{margin:0 0 4px}}
+.slot.right{{margin:10px 0 4px}}
+.slot .pad{{min-height:1px}}
+.gutter{{position:relative;z-index:1}}
+.dot{{position:absolute;left:50%;top:18px;width:12px;height:12px;margin-left:-6px;border-radius:999px;background:var(--tone,#6a4bbd);border:2px solid #fff;box-shadow:0 0 0 2px color-mix(in srgb, var(--tone,#6a4bbd) 35%, white)}}
+.event{{background:var(--tone-bg,#fff);border:1px solid color-mix(in srgb, var(--tone,#6a4bbd) 28%, #ece6f5);border-radius:16px;padding:10px 12px;display:flex;flex-direction:column;gap:4px;min-width:0}}
+.slot.left .event{{border-right:4px solid var(--tone,#6a4bbd);text-align:right;align-items:flex-end}}
+.slot.right .event{{border-left:4px solid var(--tone,#6a4bbd);text-align:left;align-items:flex-start}}
 .event.current{{box-shadow:0 0 0 2px color-mix(in srgb, var(--tone,#6a4bbd) 35%, white);filter:saturate(1.1)}}
-.window{{font-size:13px;font-weight:800;color:var(--tone,#6a4bbd);min-width:108px}}
-.activity{{flex:1;font-size:16px;font-weight:700;color:#2c2440}}
+.window{{font-size:12px;font-weight:800;color:var(--tone,#6a4bbd)}}
+.activity{{font-size:15px;font-weight:700;color:#2c2440;line-height:1.35}}
 .mood{{font-size:12px;color:#8a82a6;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.7)}}
 .footer{{padding:10px 26px 18px;text-align:right;font-size:12px;color:#a99ec6}}
 </style></head><body><div class='page'><div class='card'>
@@ -211,7 +222,7 @@ body{{margin:0;background:#0f1020;font-family:-apple-system,BlinkMacSystemFont,'
 <div class='body'>
   <div class='summary'>{summary_s}</div>
   {life}
-  <div class='timeline'>{rows}</div>
+  <div class='timeline'><div class='axis'></div>{rows}</div>
 </div>
 <div class='footer'>私人陪伴 · 今日日程</div>
 </div></div></body></html>"""

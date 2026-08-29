@@ -145,8 +145,18 @@ class TestBuildScheduleHtml(unittest.TestCase):
         html = _sample_html()
         self.assertIn("class='timeline'", html)
         self.assertIn("class='dot'", html)
-        self.assertIn("class='rail'", html)
+        self.assertIn("class='axis'", html)
+        self.assertIn("class='slot left'", html)
+        self.assertTrue("class='slot right'" in html or "class='slot right last'" in html)
         self.assertIn("--tone:", html)
+        left_pos = html.find("图书馆自习")
+        right_pos = html.find("社团排练")
+        self.assertGreater(left_pos, 0)
+        self.assertGreater(right_pos, left_pos)
+        left_chunk = html[max(0, left_pos - 280) : left_pos]
+        right_chunk = html[max(0, right_pos - 280) : right_pos]
+        self.assertIn("slot left", left_chunk)
+        self.assertIn("slot right", right_chunk)
 
     def test_avatar_uses_official_qq_qlogo(self):
         html = _sample_html(avatar_url="https://q1.qlogo.cn/g?b=qq&nk=12435768&s=640", bot_name="陪伴")
