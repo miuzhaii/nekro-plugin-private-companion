@@ -5,11 +5,13 @@ MAX_PER_USER = 5
 
 _URL_RE = re.compile(r"https?://\S+")
 _IPV4_RE = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b")
+_PATH_RE = re.compile(r"(?:file://)?(?:/root|/app|/opt|/var|/tmp|/home)[^\s'\"]+")
 
 
 def redact_error(text: str) -> str:
     redacted = _URL_RE.sub("「[链接已隐藏]」", text)
     redacted = _IPV4_RE.sub("「[地址已隐藏]」", redacted)
+    redacted = _PATH_RE.sub("「[路径已隐藏]」", redacted)
     return redacted[:120]
 
 

@@ -275,10 +275,9 @@ async def send_current_schedule_selfie(_ctx: AgentCtx, chat_key: str = "", force
 
 
 async def _send_local_image(bot: Bot, event: MessageEvent, image_path) -> None:
-    from pathlib import Path
+    from .napcat_share import napcat_file_uri
 
-    path = Path(image_path).resolve()
-    await bot.send(event, Message(MessageSegment.image(path.as_uri())))
+    await bot.send(event, Message(MessageSegment.image(napcat_file_uri(image_path))))
 
 
 async def _check_and_increment_selfie_quota() -> tuple[bool, dict]:
