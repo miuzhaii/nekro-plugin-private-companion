@@ -174,8 +174,33 @@ def resolve_wake_sleep(chrono: dict | None) -> tuple[int, int]:
     return int(wake), int(sleep)
 
 
+def in_minute_window(cur: int, start: int, end: int) -> bool:
+    """Half-open membership. If start > end the window wraps past midnight."""
+    cur = int(cur)
+    start = int(start)
+    end = int(end)
+    if start <= end:
+        end_cmp = 24 * 60 if end == 24 * 60 else end
+        return start <= cur < end_cmp
+    return cur >= start or cur < end
+
+
+def _normalize_minute_window(start: int, end: int) -> tuple[int, int]:
+    start = int(start)
+    end = int(end)
+    if end > 1440:
+        return (start % 1440, end % 1440)
+    if start >= 1440:
+        start = start % 1440
+    if start < 0:
+        start %= 1440
+    if end < 0:
+        end %= 1440
+    return (start, end)
+
+
 def shift_greeting_windows(wake_minute: int, sleep_minute: int) -> dict:
     shift = clamp_shift(int(wake_minute) - DEFAULT_WAKE_MINUTE)
-    morning = (DEFAULT_MORNING[0] + shift, DEFAULT_MORNING[1] + shift)
-    evening = (DEFAULT_EVENING[0] + shift, DEFAULT_EVENING[1] + shift)
+    morning = _normalize_minute_window(DEFAULT_MORNING[0] + shift, DEFAULT_MORNING[1] + shift)
+    evening = _normalize_minute_window(DEFAULT_EVENING[0] + shift, DEFAULT_EVENING[1] + shift)
     return {"morning": morning, "evening": evening}

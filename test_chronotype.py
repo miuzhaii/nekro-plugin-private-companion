@@ -14,6 +14,7 @@ from chronotype import (
     apply_explicit_tell,
     clamp_shift,
     empty_chronotype,
+    in_minute_window,
     note_hour_activity,
     parse_explicit_tell,
     resolve_wake_sleep,
@@ -175,6 +176,36 @@ class TestResolveAndWindows(unittest.TestCase):
         self.assertEqual(shifted["morning"][0], default["morning"][0] + 60)
         self.assertEqual(shifted["morning"], (510, 630))
         self.assertEqual(shifted["evening"], (1350, 1440))
+
+    def test_shift_greeting_windows_plus_120_wraps_evening_past_midnight(self):
+        # wake 570 = 450+120 → evening (1290+120, 1380+120)=(1410, 1500)
+        # end must wrap into [0, 1440); overnight pair keeps 00:30 inside evening.
+        windows = shift_greeting_windows(450 + 120, 1350 + 120)
+        start, end = windows["evening"]
+        self.assertGreaterEqual(start, 0)
+        self.assertLess(start, 1440)
+        self.assertGreaterEqual(end, 0)
+        self.assertLessEqual(end, 1440)
+        self.assertTrue(end < start, "overnight evening should wrap so end < start")
+        self.assertEqual((start, end), (1410, 60))
+        self.assertTrue(in_minute_window(30, start, end))
+        self.assertTrue(in_minute_window(1410, start, end))
+        self.assertFalse(in_minute_window(60, start, end))
+        self.assertFalse(in_minute_window(700, start, end))
+
+    def test_in_minute_window_same_day_half_open(self):
+        self.assertTrue(in_minute_window(450, 450, 570))
+        self.assertTrue(in_minute_window(569, 450, 570))
+        self.assertFalse(in_minute_window(570, 450, 570))
+        self.assertFalse(in_minute_window(449, 450, 570))
+
+    def test_in_minute_window_overnight(self):
+        self.assertTrue(in_minute_window(1410, 1410, 60))
+        self.assertTrue(in_minute_window(1439, 1410, 60))
+        self.assertTrue(in_minute_window(0, 1410, 60))
+        self.assertTrue(in_minute_window(30, 1410, 60))
+        self.assertFalse(in_minute_window(60, 1410, 60))
+        self.assertFalse(in_minute_window(700, 1410, 60))
 
 
 if __name__ == "__main__":

@@ -45,8 +45,7 @@ def _in_greeting_window(now: Optional[datetime] = None, user_state=None) -> Tupl
     else:
         windows = {"morning": chrono_mod.DEFAULT_MORNING, "evening": chrono_mod.DEFAULT_EVENING}
     for kind, (start, end) in windows.items():
-        end_cmp = 24 * 60 if end == 24 * 60 else end
-        if start <= cur < end_cmp:
+        if chrono_mod.in_minute_window(cur, start, end):
             return True, kind
     return False, ""
 
@@ -320,8 +319,29 @@ async def scheduler_loop() -> None:
             item = pq.pop_due(q, core.now_ts())
             await core.save_proactive_queue(q)
             if item:
-                motivation = item.get("motivation") or {"kind": item.get("kind"), "desc": "补发一条刚才没发出去的主动消息"}
-                await trigger_proactive(str(item.get("user_id") or ""), motivation)
+                uid = str(item.get("user_id") or "")
+                motivation = item.get("motivation") or {
+                    "kind": item.get("kind"),
+                    "desc": "补发一条刚才没发出去的主动消息",
+                }
+                us = await core.get_user_state(uid)
+                ok, reason = await should_send(uid, us, bot_state)
+                if pq.decide_queue_retry(ok, item) != "send":
+                    q2 = await core.get_proactive_queue()
+                    kind = str(item.get("kind") or (item.get("motivation") or {}).get("kind") or "")
+                    pq.enqueue(
+                        q2,
+                        {
+                            "user_id": uid,
+                            "kind": kind,
+                            "motivation": motivation,
+                            "error": reason,
+                        },
+                        now=core.now_ts(),
+                    )
+                    await core.save_proactive_queue(q2)
+                    continue
+                await trigger_proactive(uid, motivation)
                 continue
             # 4. 主动陪伴判定（每 tick 最多对 1 个用户发起，防止同时打扰多人）
             for uid in core.target_user_ids():
