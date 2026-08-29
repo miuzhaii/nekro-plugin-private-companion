@@ -1,7 +1,6 @@
 """命令处理与钩子：/陪伴 命令、生活状态注入、用户消息活动追踪、调度器启动"""
 
 import asyncio
-import base64
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +17,7 @@ from nonebot.params import CommandArg
 from . import core, proactive
 from .plugin import get_config, plugin
 from .proactive import start_scheduler
+from .selfie_draw import generate_image_with_configured_provider as _generate_image_with_configured_provider
 from .state import (
     build_inject_text,
     current_plan_event,
@@ -252,36 +252,6 @@ async def send_current_schedule_selfie(_ctx: AgentCtx, chat_key: str = "", force
     except Exception as e:
         logger.exception(f"[private_companion] agent 工具发送日程自拍失败: {e!r}")
         return {"success": False, "error": str(e)[:160]}
-
-
-async def _generate_image_with_configured_provider(prompt: str, reference_image: tuple[Path, str] | None = None) -> str:
-    cfg = get_config()
-    group_name = str(cfg.SELFIE_MODEL_GROUP or "").strip()
-    if group_name:
-        from nekro_agent.core.config import config as global_config
-        from packages.magic_draw.utils import generate_image_via_chat
-
-        if group_name not in global_config.MODEL_GROUPS:
-            raise ValueError(f"未找到配置的绘图模型组: {group_name}")
-        reference_images = None
-        if reference_image is not None:
-            ref_path, ref_desc = reference_image
-            mime = "image/jpeg" if ref_path.suffix.lower() in {".jpg", ".jpeg"} else "image/webp" if ref_path.suffix.lower() == ".webp" else "image/png"
-            ref_b64 = base64.b64encode(ref_path.read_bytes()).decode("utf-8")
-            reference_images = [(f"data:{mime};base64,{ref_b64}", ref_desc)]
-        return await generate_image_via_chat(
-            global_config.MODEL_GROUPS[group_name],
-            prompt,
-            timeout=300,
-            reference_images=reference_images,
-            stream_mode=True,
-        )
-
-    from packages.z_img_draw.draw import generate_image
-
-    if reference_image is not None:
-        prompt = f"{reference_image[1]}\n\n{prompt}"
-    return await generate_image(prompt, aspect_ratio="1:1")
 
 
 async def _send_local_image(bot: Bot, event: MessageEvent, image_path) -> None:

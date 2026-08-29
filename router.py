@@ -5,7 +5,6 @@
 """
 
 import inspect
-import base64
 from pathlib import Path
 from typing import Optional
 
@@ -15,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from . import core
 from .plugin import get_config, plugin
+from .selfie_draw import generate_image_with_configured_provider as _generate_image_with_configured_provider
 from .proactive import pick_motivation, should_send, trigger_proactive
 from .state import (
     build_inject_text,
@@ -108,36 +108,6 @@ def _apply_config_defaults(profile: PersonaVisualProfile) -> PersonaVisualProfil
     if not profile.negative_prompt.strip() and cfg.PERSONA_NEGATIVE_PROMPT.strip():
         profile.negative_prompt = cfg.PERSONA_NEGATIVE_PROMPT.strip()
     return profile
-
-
-async def _generate_image_with_configured_provider(prompt: str, reference_image: tuple[Path, str] | None = None) -> str:
-    cfg = get_config()
-    group_name = str(cfg.SELFIE_MODEL_GROUP or "").strip()
-    if group_name:
-        from nekro_agent.core.config import config as global_config
-        from packages.magic_draw.utils import generate_image_via_chat
-
-        if group_name not in global_config.MODEL_GROUPS:
-            raise ValueError(f"未找到配置的绘图模型组: {group_name}")
-        reference_images = None
-        if reference_image is not None:
-            ref_path, ref_desc = reference_image
-            mime = "image/jpeg" if ref_path.suffix.lower() in {".jpg", ".jpeg"} else "image/webp" if ref_path.suffix.lower() == ".webp" else "image/png"
-            ref_b64 = base64.b64encode(ref_path.read_bytes()).decode("utf-8")
-            reference_images = [(f"data:{mime};base64,{ref_b64}", ref_desc)]
-        return await generate_image_via_chat(
-            global_config.MODEL_GROUPS[group_name],
-            prompt,
-            timeout=300,
-            reference_images=reference_images,
-            stream_mode=True,
-        )
-
-    from packages.z_img_draw.draw import generate_image
-
-    if reference_image is not None:
-        prompt = f"{reference_image[1]}\n\n{prompt}"
-    return await generate_image(prompt, aspect_ratio="1:1")
 
 
 async def _check_and_increment_selfie_quota() -> tuple[bool, dict]:
