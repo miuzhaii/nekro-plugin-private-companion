@@ -14,6 +14,11 @@ from nekro_agent.api.plugin import ConfigBase, NekroPlugin
 from nekro_agent.core.core_utils import ExtraField
 from pydantic import Field
 
+try:
+    from pydantic import model_validator
+except Exception:  # pydantic v1 or missing
+    model_validator = None  # type: ignore
+
 MODEL_GROUP_REF = ExtraField(ref_model_groups=True, model_type="chat").model_dump()
 DRAW_MODEL_GROUP_REF = ExtraField(ref_model_groups=True, model_type="draw").model_dump()
 
@@ -21,7 +26,7 @@ plugin = NekroPlugin(
     name="私人陪伴",
     module_name="private_companion",
     description="让 bot 拥有连续的生活感（日程/状态/梦境/日记）并主动陪伴指定用户，附 WebUI 面板",
-    version="0.1.0",
+    version="0.2.0",
     author="xiaojiu",
     url="/plugins/xiaojiu.private_companion/",
 )
@@ -153,6 +158,19 @@ class CompanionConfig(ConfigBase):
         title="插件管理员 QQ 列表",
         description="可使用全部 /陪伴 命令；陪伴对象本人可管理自己的开关",
     )
+
+    if model_validator is not None:
+
+        @model_validator(mode="after")
+        def _warn_selfie_model_group(self):
+            try:
+                from nekro_agent.api.core import logger as _logger
+            except Exception:
+                _logger = None
+            if getattr(self, "SELFIE_ENABLED", False) and not str(getattr(self, "SELFIE_MODEL_GROUP", "") or "").strip():
+                if _logger is not None:
+                    _logger.warning("启用日程自拍时必须配置绘图模型组 SELFIE_MODEL_GROUP")
+            return self
 
 
 def get_config() -> CompanionConfig:

@@ -128,6 +128,15 @@ async def save_user_state(user_id: str, state: dict) -> None:
     await set_json(f"user_{user_id}", state)
 
 
+async def get_proactive_queue() -> list:
+    q = await get_json("proactive_queue", [])
+    return q if isinstance(q, list) else []
+
+
+async def save_proactive_queue(queue: list) -> None:
+    await set_json("proactive_queue", queue)
+
+
 def target_user_ids() -> List[str]:
     return [str(x).strip() for x in get_config().TARGET_USER_IDS if str(x).strip()]
 

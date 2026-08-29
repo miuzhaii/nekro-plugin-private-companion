@@ -15,9 +15,12 @@ from nonebot.matcher import Matcher
 from nonebot.params import CommandArg
 
 from . import core, proactive
+from .busy_gate import should_block_proactive
+from .chronotype import resolve_wake_sleep
 from .plugin import get_config, plugin
 from .proactive import start_scheduler
 from .selfie_draw import generate_image_with_configured_provider as _generate_image_with_configured_provider
+from .selfie_draw import is_rate_limit_error, validate_selfie_config
 from .state import (
     build_inject_text,
     current_plan_event,
@@ -42,6 +45,10 @@ async def _auto_generate_daily_selfies(plan: dict) -> None:
     cfg = get_config()
     if not (cfg.VISUALS_ENABLED and cfg.SELFIE_ENABLED):
         return
+    err = validate_selfie_config(cfg.SELFIE_ENABLED, cfg.SELFIE_MODEL_GROUP)
+    if err:
+        logger.warning(err)
+        return
     try:
         bot_state = await core.get_bot_state()
         base_dir = _visuals_base_dir()
@@ -60,7 +67,10 @@ async def _auto_generate_daily_selfies(plan: dict) -> None:
         )
         logger.info(f"[private_companion] 日程图片预生成完毕，共 {len(events)} 张")
     except Exception as e:
-        logger.warning(f"[private_companion] 日程图片预生成失败: {e!r}")
+        if is_rate_limit_error(e):
+            logger.warning("[private_companion] 日程图片预生成失败：请求过于频繁")
+        else:
+            logger.warning(f"[private_companion] 日程图片预生成失败: {e!r}")
 
 
 register_after_daily_plan(_auto_generate_daily_selfies)
@@ -193,6 +203,9 @@ async def _send_schedule_selfie_to_chat(ctx: AgentCtx, chat_key: str, force: boo
     cfg = get_config()
     if not (cfg.VISUALS_ENABLED and cfg.SELFIE_ENABLED):
         return {"success": False, "error": "视觉资产或日程自拍功能未启用"}
+    err = validate_selfie_config(cfg.SELFIE_ENABLED, cfg.SELFIE_MODEL_GROUP)
+    if err:
+        return {"success": False, "error": err}
     bot_state = await ensure_daily_state()
     ev = current_plan_event(bot_state) or {}
     if not ev:
@@ -390,6 +403,9 @@ async def handle_companion(matcher: Matcher, event: MessageEvent, bot: Bot, arg:
     elif action == "自拍":
         if not (cfg.VISUALS_ENABLED and cfg.SELFIE_ENABLED):
             await finish_with(matcher, message="❌ 视觉资产或日程自拍功能未启用，请先在插件配置中开启")
+        err = validate_selfie_config(cfg.SELFIE_ENABLED, cfg.SELFIE_MODEL_GROUP)
+        if err:
+            await finish_with(matcher, message=f"❌ {err}")
         bot_state = await ensure_daily_state()
         ev = current_plan_event(bot_state) or {}
         if not ev:
@@ -420,6 +436,9 @@ async def handle_companion(matcher: Matcher, event: MessageEvent, bot: Bot, arg:
             await _send_local_image(bot, event, image_path)
             await finish_with(matcher, message="✅ 自拍已发送")
         except Exception as e:
+            if is_rate_limit_error(e):
+                logger.warning("[private_companion] 自拍生成失败：请求过于频繁")
+                await finish_with(matcher, message="自拍失败：请求过于频繁，请稍后再试")
             logger.exception(f"[private_companion] 自拍生成/发送失败: {e!r}")
             await finish_with(matcher, message=f"❌ 自拍失败: {str(e)[:120]}")
 
@@ -491,6 +510,15 @@ async def handle_companion(matcher: Matcher, event: MessageEvent, bot: Bot, arg:
         if ok:
             motivation = await proactive.pick_motivation(target, us, bot_state)
             msg += f"\n候选动机[{motivation.get('kind')}]: {motivation.get('desc')}"
+        ev = current_plan_event(bot_state) or {}
+        act = str(ev.get("activity") or "")
+        busy_blk, busy_r = should_block_proactive({"activity": act, "energy": 0}, kind="")
+        wake, sleep = resolve_wake_sleep(us.get("chronotype") if isinstance(us.get("chronotype"), dict) else None)
+        q = await core.get_proactive_queue()
+        nq = sum(1 for it in q if str(it.get("user_id")) == str(target))
+        msg += f"\n忙闲: {'拦截' if busy_blk else '空闲'} {busy_r or act or '无日程'}"
+        msg += f"\n作息: 醒{wake//60:02d}:{wake%60:02d} 睡{sleep//60:02d}:{sleep%60:02d}"
+        msg += f"\n待发队列: {nq} 条"
         await finish_with(matcher, message=msg)
 
     # ---- 注入预览 ----
