@@ -2,7 +2,6 @@
 """TDD tests for schedule-card HTML + Pillow renderer (pure functions)."""
 from __future__ import annotations
 
-import asyncio
 import re
 import unittest
 from types import SimpleNamespace
@@ -10,8 +9,11 @@ from types import SimpleNamespace
 from schedule_card import (
     DEFAULT_VIEWPORT_WIDTH,
     build_schedule_html,
+    encode_avatar_data_uri,
     escape_html,
+    event_tone,
     html_to_image,
+    qq_avatar_url,
     render_fallback_png,
     render_schedule_card,
 )
@@ -30,6 +32,19 @@ FAKE_DAY_CARD = {
 }
 
 
+def _tiny_png() -> bytes:
+    return render_fallback_png(
+        date_key="x",
+        summary="y",
+        events=[{"window": "08:00-09:00", "activity": "起床", "mood": ""}],
+        day_card=None,
+    )
+
+
+def _strip_data_uris(html: str) -> str:
+    return re.sub(r"data:image/[^;]+;base64,[A-Za-z0-9+/=]+", "", html)
+
+
 def _sample_html(**overrides) -> str:
     kwargs = dict(
         date_key="2026-08-30",
@@ -37,6 +52,9 @@ def _sample_html(**overrides) -> str:
         events=FAKE_EVENTS,
         day_card=FAKE_DAY_CARD,
         current_window="",
+        avatar_data_uri="",
+        avatar_url="",
+        bot_name="",
     )
     kwargs.update(overrides)
     return build_schedule_html(**kwargs)
@@ -45,6 +63,32 @@ def _sample_html(**overrides) -> str:
 class TestEscapeHtml(unittest.TestCase):
     def test_escape_html_escapes_angle_brackets(self):
         self.assertEqual(escape_html("<script>"), "&lt;script&gt;")
+
+
+class TestEventTone(unittest.TestCase):
+    def test_study_and_rehearsal_use_different_colors(self):
+        a = event_tone("图书馆自习", 0)
+        b = event_tone("社团排练", 1)
+        self.assertNotEqual(a["main"], b["main"])
+        self.assertTrue(a["main"].startswith("#"))
+        self.assertTrue(b["light"].startswith("#"))
+
+    def test_sleep_keyword_is_stable(self):
+        self.assertEqual(event_tone("睡觉", 0)["main"], event_tone("午睡回笼", 9)["main"])
+
+
+class TestEncodeAvatar(unittest.TestCase):
+    def test_data_uri_has_no_http_or_ipv4(self):
+        uri = encode_avatar_data_uri(_tiny_png())
+        self.assertTrue(uri.startswith("data:image/png;base64,"))
+        self.assertIsNone(HTTP_RE.search(uri))
+        self.assertIsNone(IPV4_RE.search(_strip_data_uris(uri)))
+
+    def test_qq_avatar_url_official_qlogo(self):
+        url = qq_avatar_url("12435768")
+        self.assertEqual(url, "https://q1.qlogo.cn/g?b=qq&nk=12435768&s=640")
+        self.assertEqual(qq_avatar_url(""), "")
+        self.assertEqual(qq_avatar_url("abc"), "")
 
 
 class TestBuildScheduleHtml(unittest.TestCase):
@@ -97,6 +141,28 @@ class TestBuildScheduleHtml(unittest.TestCase):
         html = _sample_html()
         self.assertIn("560", html)
 
+    def test_timeline_and_colored_events(self):
+        html = _sample_html()
+        self.assertIn("class='timeline'", html)
+        self.assertIn("class='dot'", html)
+        self.assertIn("class='rail'", html)
+        self.assertIn("--tone:", html)
+
+    def test_avatar_uses_official_qq_qlogo(self):
+        html = _sample_html(avatar_url="https://q1.qlogo.cn/g?b=qq&nk=12435768&s=640", bot_name="陪伴")
+        self.assertIn("q1.qlogo.cn", html)
+        self.assertIn("nk=12435768", html)
+        self.assertIn("陪伴", html)
+        stripped = html.replace("https://q1.qlogo.cn/g?b=qq&amp;nk=12435768&amp;s=640", "")
+        stripped = stripped.replace("https://q1.qlogo.cn/g?b=qq&nk=12435768&s=640", "")
+        self.assertIsNone(HTTP_RE.search(stripped), stripped)
+        self.assertIsNone(IPV4_RE.search(html), html)
+
+    def test_avatar_rejects_non_qlogo_http(self):
+        html = _sample_html(avatar_url="http://evil.example/x.png")
+        self.assertNotIn("evil.example", html)
+        self.assertNotIn("http://", html)
+
 
 class TestRenderFallbackPng(unittest.TestCase):
     def test_fallback_png_starts_with_magic(self):
@@ -105,6 +171,7 @@ class TestRenderFallbackPng(unittest.TestCase):
             summary="今天窝在家里把作业清掉。",
             events=FAKE_EVENTS,
             day_card=FAKE_DAY_CARD,
+            avatar_bytes=_tiny_png(),
         )
         self.assertTrue(data.startswith(PNG_MAGIC))
         self.assertGreater(len(data), 64)

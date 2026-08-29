@@ -14,6 +14,8 @@ class TestScheduleGenerateCommandSource(unittest.TestCase):
         src = ROOT.joinpath("handlers.py").read_text(encoding="utf-8")
         self.assertIn("日程生成", src)
         self.assertIn("render_schedule_card", src)
+        self.assertIn("qq_avatar_url", src)
+        self.assertIn("self_id", src)
         self.assertTrue(
             "format_user_error('日程生成失败'" in src
             or 'format_user_error("日程生成失败"' in src,

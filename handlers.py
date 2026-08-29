@@ -369,8 +369,9 @@ async def handle_companion(matcher: Matcher, event: MessageEvent, bot: Bot, arg:
                         lines.append(f"• {e}")
                 await bot.send(event, "\n".join(lines))
                 await finish_with(matcher, message="✅ 日程已生成")
-            from .schedule_card import render_schedule_card
+            from .schedule_card import qq_avatar_url, render_schedule_card
             ev = current_plan_event(bot_state) or {}
+            bot_qq = str(getattr(event, "self_id", "") or "")
             png = await render_schedule_card(
                 date_key=str(bot_state.get("date") or core.today_key()),
                 summary=str(plan.get("summary") or ""),
@@ -379,6 +380,8 @@ async def handle_companion(matcher: Matcher, event: MessageEvent, bot: Bot, arg:
                 current_window=str(ev.get("window") or ""),
                 renderer_url=str(getattr(cfg, "RENDERER_URL", "") or ""),
                 timeout=float(getattr(cfg, "RENDER_TIMEOUT", 60) or 60),
+                avatar_url=qq_avatar_url(bot_qq),
+                bot_name="陪伴",
             )
             out_dir = Path(str(plugin.get_plugin_data_dir())) / "schedule_cards"
             out_dir.mkdir(parents=True, exist_ok=True)
