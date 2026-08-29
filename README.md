@@ -78,6 +78,12 @@ docker restart nekro_agent
 - 主动消息由 agent 本人生成（nekro timer 唤醒机制），不是插件代笔，风格与日常对话完全一致
 - 状态机大幅精简（原版 daily_state 有 6000+ 行，本版核心字段化）
 
+## v0.2
+- 忙闲门闩：上课/开会/写代码时不主动打扰；紧急消息不延迟被动回复
+- 按用户作息平移早/晚问候窗（默认 07:30 起 / 22:30 睡；满 5 天直方图才学习）
+- 主动唤醒失败进入待发队列（TTL 1 小时，每用户最多 5 条，同 kind 去重）
+- 启用日程自拍必须配置 SELFIE_MODEL_GROUP 绘图模型组；429 有限重试
+
 ## 🙏 致谢
 
 - 原插件：[menglimi/astrbot_plugin_private_companion](https://github.com/menglimi/astrbot_plugin_private_companion)
