@@ -10,6 +10,9 @@ from typing import Optional, Tuple
 from nekro_agent.api.core import logger
 
 from . import core
+from .busy_gate import should_block_proactive
+from . import chronotype as chrono_mod
+from . import proactive_queue as pq
 from .plugin import get_config, plugin
 from .state import (
     current_plan_event,
@@ -32,12 +35,18 @@ _scheduler_task: Optional[asyncio.Task] = None
 # ============ 小工具 ============
 
 
-def _in_greeting_window(now: Optional[datetime] = None) -> Tuple[bool, str]:
+def _in_greeting_window(now: Optional[datetime] = None, user_state=None) -> Tuple[bool, str]:
     """是否处于早/晚问候窗口，返回 (是否, "morning"/"evening")"""
     now = now or datetime.now()
     cur = now.hour * 60 + now.minute
-    for kind, (sh, sm), (eh, em) in GREETING_WINDOWS:
-        if sh * 60 + sm <= cur < eh * 60 + em:
+    if user_state and isinstance(user_state.get("chronotype"), dict):
+        wake, sleep = chrono_mod.resolve_wake_sleep(user_state["chronotype"])
+        windows = chrono_mod.shift_greeting_windows(wake, sleep)
+    else:
+        windows = {"morning": chrono_mod.DEFAULT_MORNING, "evening": chrono_mod.DEFAULT_EVENING}
+    for kind, (start, end) in windows.items():
+        end_cmp = 24 * 60 if end == 24 * 60 else end
+        if start <= cur < end_cmp:
             return True, kind
     return False, ""
 
@@ -108,6 +117,11 @@ async def on_user_message_activity(user_id: str, text: str) -> None:
         logger.info(f"[private_companion] 用户 {user_id} 回复了主动消息，关系分 {us['relationship_score']}")
     us["last_user_msg_ts"] = now
     us["last_user_msg"] = str(text or "").strip()[:200]
+    c = us.get("chronotype") if isinstance(us.get("chronotype"), dict) else chrono_mod.empty_chronotype()
+    local = datetime.now()
+    chrono_mod.note_hour_activity(c, local.hour, local.strftime("%Y-%m-%d"))
+    chrono_mod.apply_explicit_tell(c, text, now)
+    us["chronotype"] = c
     await core.save_user_state(user_id, us)
 
 
@@ -140,20 +154,24 @@ async def should_send(user_id: str, user_state: dict, bot_state: dict) -> Tuple[
     if last_sent > 0 and now - last_sent < min_gap:
         remain = int((min_gap - (now - last_sent)) / 60) + 1
         return False, f"距上次主动不足间隔（退避×{backoff:.1f}，还需约 {remain} 分钟）"
-    # 5. 用户安静（从未发言视为安静；问候窗口可放宽一半）
+    # 5. 忙闲门闩（上课/开会/写代码等不主动打扰）
+    ev = current_plan_event(bot_state) or {}
+    activity = str(ev.get("activity") or "")
+    energy = _bot_energy(bot_state)
+    blocked, busy_reason = should_block_proactive({"activity": activity, "energy": energy}, kind="")
+    if blocked:
+        return False, busy_reason
+    # 6. 用户安静（从未发言视为安静；问候窗口可放宽一半）
     last_user = float(user_state.get("last_user_msg_ts") or 0)
     idle_sec = (now - last_user) if last_user > 0 else float("inf")
     idle_need = cfg.IDLE_MINUTES * 60
-    in_greet, _ = _in_greeting_window()
+    in_greet, _ = _in_greeting_window(user_state=user_state)
     if idle_sec < idle_need and not (cfg.ENABLE_GREETINGS and in_greet and idle_sec >= idle_need / 2):
         return False, f"用户最近活跃（{int(idle_sec / 60)} 分钟前发过消息，阈值 {cfg.IDLE_MINUTES} 分钟）"
     # 用户安静超过 3 天且连续被忽视 → 主动意愿降低，每天最多 1 条
     if ignored >= 3 and idle_sec > 72 * 3600 and quota_used >= 1:
         return False, "用户已安静超过 3 天且连续未回复，今日降为最多 1 条主动消息"
-    # 6. bot 自己在睡觉
-    ev = current_plan_event(bot_state) or {}
-    activity = str(ev.get("activity") or "")
-    energy = _bot_energy(bot_state)
+    # 7. bot 自己在睡觉
     if ("睡" in activity or "休息" in activity) and energy < 30:
         return False, f"bot 正在「{activity}」（能量 {energy}），不主动打扰"
     return True, "ok"
@@ -171,7 +189,7 @@ async def pick_motivation(user_id: str, user_state: dict, bot_state: dict) -> di
     candidates = []
 
     # a. 问候窗口 → 早安/晚安
-    in_greet, greet_kind = _in_greeting_window()
+    in_greet, greet_kind = _in_greeting_window(user_state=user_state)
     if cfg.ENABLE_GREETINGS and in_greet:
         if greet_kind == "morning":
             candidates.append({
@@ -252,6 +270,9 @@ async def trigger_proactive(user_id: str, motivation: dict, manual: bool = False
     )
     ok = await core.wake_agent_for_user(user_id, event_desc)
     if not ok:
+        q = await core.get_proactive_queue()
+        pq.enqueue(q, {"user_id": user_id, "kind": str(motivation.get("kind") or ""), "motivation": motivation, "error": "主动唤醒失败"}, now=core.now_ts())
+        await core.save_proactive_queue(q)
         logger.warning(f"[private_companion] 主动唤醒失败 user={user_id} kind={motivation.get('kind')}")
         return False
 
@@ -294,6 +315,14 @@ async def scheduler_loop() -> None:
                 await core.save_bot_state(bot_state)
             # 3. 到点写日记
             await maybe_generate_diary_by_time()
+            # 3b. 补发失败的主动唤醒
+            q = await core.get_proactive_queue()
+            item = pq.pop_due(q, core.now_ts())
+            await core.save_proactive_queue(q)
+            if item:
+                motivation = item.get("motivation") or {"kind": item.get("kind"), "desc": "补发一条刚才没发出去的主动消息"}
+                await trigger_proactive(str(item.get("user_id") or ""), motivation)
+                continue
             # 4. 主动陪伴判定（每 tick 最多对 1 个用户发起，防止同时打扰多人）
             for uid in core.target_user_ids():
                 us = await core.get_user_state(uid)
