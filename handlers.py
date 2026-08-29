@@ -78,6 +78,7 @@ HELP_TEXT = """🏠 私人陪伴 - 命令帮助
 ━━━━━━━━━━━━━━━
 • /陪伴 状态 - 今日概括/当前时段/能量心情/各用户配额
 • /陪伴 日程 - 查看今日日程
+• /陪伴 日程生成 - 重新生成今日日程并发送日程图
 • /陪伴 梦境 - 查看今日梦境
 • /陪伴 日记 - 查看最近一篇日记
 • /陪伴 自拍 - 生成/发送当前日程自拍
@@ -342,6 +343,52 @@ async def handle_companion(matcher: Matcher, event: MessageEvent, bot: Bot, arg:
                 f"  关系{us.get('relationship_score', 0)}  忽视{us.get('ignored_streak', 0)}",
             )
         await finish_with(matcher, message="\n".join(lines))
+
+    # ---- 日程生成（须在「日程」之前，避免「/陪伴 日程 生成」被文本列表吃掉）----
+    elif action == "日程生成" or (action == "日程" and len(parts) > 1 and parts[1] == "生成"):
+        await bot.send(event, "📅 正在生成今日日程并渲染卡片，请稍候...")
+        try:
+            await generate_daily_plan(force=True)
+            bot_state = await core.get_bot_state()
+            plan = bot_state.get("plan") or {}
+            events = plan.get("events") or []
+            if not events:
+                await finish_with(matcher, message="📅 今日还没有日程")
+            if not cfg.SCHEDULE_CARD_ENABLED:
+                lines = [f"📅 今日日程（{bot_state.get('date', core.today_key())}）"]
+                card = bot_state.get("day_card") if isinstance(bot_state.get("day_card"), dict) else None
+                if card:
+                    lines.append(format_card_for_user(card))
+                for e in events:
+                    if isinstance(e, dict):
+                        mood = str(e.get("mood") or "").strip()
+                        lines.append(
+                            f"• {e.get('window', '')} {e.get('activity', '')}" + (f"（{mood}）" if mood else ""),
+                        )
+                    else:
+                        lines.append(f"• {e}")
+                await bot.send(event, "\n".join(lines))
+                await finish_with(matcher, message="✅ 日程已生成")
+            from .schedule_card import render_schedule_card
+            ev = current_plan_event(bot_state) or {}
+            png = await render_schedule_card(
+                date_key=str(bot_state.get("date") or core.today_key()),
+                summary=str(plan.get("summary") or ""),
+                events=events,
+                day_card=bot_state.get("day_card") if isinstance(bot_state.get("day_card"), dict) else None,
+                current_window=str(ev.get("window") or ""),
+                renderer_url=str(getattr(cfg, "RENDERER_URL", "") or ""),
+                timeout=float(getattr(cfg, "RENDER_TIMEOUT", 60) or 60),
+            )
+            out_dir = Path(str(plugin.get_plugin_data_dir())) / "schedule_cards"
+            out_dir.mkdir(parents=True, exist_ok=True)
+            out_path = out_dir / f"schedule_{bot_state.get('date') or core.today_key()}.png"
+            out_path.write_bytes(png)
+            await _send_local_image(bot, event, out_path)
+            await finish_with(matcher, message="✅ 今日日程图已发送")
+        except Exception as e:
+            logger.exception(f"[private_companion] 日程生成失败: {e!r}")
+            await finish_with(matcher, message=f"❌ {format_user_error('日程生成失败', e)}")
 
     # ---- 日程 ----
     elif action == "日程":
