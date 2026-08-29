@@ -84,6 +84,7 @@ async def get_bot_state() -> dict:
     state.setdefault("state", {})
     state.setdefault("dream", {})
     state.setdefault("diaries", [])
+    state.setdefault("day_card", {})
     return state
 
 
@@ -135,6 +136,24 @@ async def get_proactive_queue() -> list:
 
 async def save_proactive_queue(queue: list) -> None:
     await set_json("proactive_queue", queue)
+
+
+async def get_day_card_history() -> dict:
+    from . import day_card as dc
+    h = await get_json("day_card_history", None)
+    if not isinstance(h, dict):
+        return dc.empty_history()
+    h.setdefault("recent_scene_ids", [])
+    h.setdefault("recent_event_ids", [])
+    if not isinstance(h["recent_scene_ids"], list):
+        h["recent_scene_ids"] = []
+    if not isinstance(h["recent_event_ids"], list):
+        h["recent_event_ids"] = []
+    return h
+
+
+async def save_day_card_history(history: dict) -> None:
+    await set_json("day_card_history", history)
 
 
 def target_user_ids() -> List[str]:

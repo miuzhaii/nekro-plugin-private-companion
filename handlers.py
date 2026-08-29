@@ -15,6 +15,7 @@ from nonebot.matcher import Matcher
 from nonebot.params import CommandArg
 
 from . import core, proactive
+from .day_card import format_card_for_user
 from .busy_gate import should_block_proactive, should_delay_passive_reply
 from .chronotype import resolve_wake_sleep
 from .plugin import get_config, plugin
@@ -349,6 +350,9 @@ async def handle_companion(matcher: Matcher, event: MessageEvent, bot: Bot, arg:
         if not events:
             await finish_with(matcher, message="📅 今日还没有日程（可用「/陪伴 重置日程」生成）")
         lines = [f"📅 今日日程（{bot_state.get('date', core.today_key())}）"]
+        card = bot_state.get("day_card") if isinstance(bot_state.get("day_card"), dict) else None
+        if card:
+            lines.append(format_card_for_user(card))
         for e in events:
             if isinstance(e, dict):
                 mood = str(e.get("mood") or "").strip()
@@ -372,7 +376,7 @@ async def handle_companion(matcher: Matcher, event: MessageEvent, bot: Bot, arg:
                 await bot.send(event, f"✅ 今日日程已重新生成，共 {n} 个时段")
             except Exception as e:
                 logger.exception(f"[private_companion] 重置日程失败: {e!r}")
-                await bot.send(event, f"❌ 日程生成失败: {str(e)[:120]}")
+                await bot.send(event, f"❌ {format_user_error('日程生成失败', e)}")
 
         asyncio.create_task(_regen_plan())
         await finish_with(matcher, message="🔄 正在重新生成今日日程，请稍候...")
@@ -521,6 +525,11 @@ async def handle_companion(matcher: Matcher, event: MessageEvent, bot: Bot, arg:
         msg += f"\n忙闲: {'拦截' if busy_blk else '空闲'} {busy_r or act or '无日程'}"
         msg += f"\n作息: 醒{wake//60:02d}:{wake%60:02d} 睡{sleep//60:02d}:{sleep%60:02d}"
         msg += f"\n待发队列: {nq} 条"
+        card = bot_state.get("day_card") if isinstance(bot_state.get("day_card"), dict) else None
+        if card:
+            msg += "\n" + format_card_for_user(card)
+        else:
+            msg += "\n今日人生卡: 尚未抽取"
         await finish_with(matcher, message=msg)
 
     # ---- 注入预览 ----

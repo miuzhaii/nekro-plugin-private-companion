@@ -26,7 +26,7 @@ plugin = NekroPlugin(
     name="私人陪伴",
     module_name="private_companion",
     description="让 bot 拥有连续的生活感（日程/状态/梦境/日记）并主动陪伴指定用户，附 WebUI 面板",
-    version="0.2.1",
+    version="0.3.0",
     author="xiaojiu",
     url="/plugins/xiaojiu.private_companion/",
 )
@@ -85,6 +85,11 @@ class CompanionConfig(ConfigBase):
         title="日程风格提示（可选）",
         description="影响每日日程生成的补充说明，如「大学生作息」「自由职业画师，常熬夜」",
         json_schema_extra=ExtraField(is_textarea=True).model_dump(),
+    )
+    DAY_CARD_ENABLED: bool = Field(
+        default=True,
+        title="启用每日人生卡",
+        description="每天抽一张场景+两件事件再生成日程，减少上课/写代码复读。",
     )
     DIARY_TIME: str = Field(
         default="23:10",
