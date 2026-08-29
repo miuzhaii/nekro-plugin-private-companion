@@ -26,7 +26,7 @@ plugin = NekroPlugin(
     name="私人陪伴",
     module_name="private_companion",
     description="让 bot 拥有连续的生活感（日程/状态/梦境/日记）并主动陪伴指定用户，附 WebUI 面板",
-    version="0.2.0",
+    version="0.2.1",
     author="xiaojiu",
     url="/plugins/xiaojiu.private_companion/",
 )

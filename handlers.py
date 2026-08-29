@@ -15,12 +15,13 @@ from nonebot.matcher import Matcher
 from nonebot.params import CommandArg
 
 from . import core, proactive
-from .busy_gate import should_block_proactive
+from .busy_gate import should_block_proactive, should_delay_passive_reply
 from .chronotype import resolve_wake_sleep
 from .plugin import get_config, plugin
 from .proactive import start_scheduler
+from .proactive_queue import format_user_error
 from .selfie_draw import generate_image_with_configured_provider as _generate_image_with_configured_provider
-from .selfie_draw import is_rate_limit_error, validate_selfie_config
+from .selfie_draw import validate_selfie_config
 from .state import (
     build_inject_text,
     current_plan_event,
@@ -67,10 +68,7 @@ async def _auto_generate_daily_selfies(plan: dict) -> None:
         )
         logger.info(f"[private_companion] 日程图片预生成完毕，共 {len(events)} 张")
     except Exception as e:
-        if is_rate_limit_error(e):
-            logger.warning("[private_companion] 日程图片预生成失败：请求过于频繁")
-        else:
-            logger.warning(f"[private_companion] 日程图片预生成失败: {e!r}")
+        logger.warning(f"[private_companion] 日程图片预生成失败: {format_user_error('自拍失败', e)}")
 
 
 register_after_daily_plan(_auto_generate_daily_selfies)
@@ -151,7 +149,14 @@ if hasattr(plugin, "mount_on_user_message"):
                 text = getattr(message, "content_text", None) or str(message)
             except Exception:
                 text = ""
-            await proactive.on_user_message_activity(qq, str(text or ""))
+            text = str(text or "")
+            bot_state = await core.get_bot_state()
+            ev = current_plan_event(bot_state) or {}
+            activity = str(ev.get("activity") or "")
+            if should_delay_passive_reply(activity, text):
+                logger.info("[private_companion] bot busy, skip treating this as proactive-reply / idle reset")
+                return
+            await proactive.on_user_message_activity(qq, text)
         except Exception as e:
             logger.warning(f"[private_companion] 用户消息钩子异常: {e!r}")
 
@@ -264,7 +269,7 @@ async def send_current_schedule_selfie(_ctx: AgentCtx, chat_key: str = "", force
         return await _send_schedule_selfie_to_chat(_ctx, target_chat_key, force=bool(force))
     except Exception as e:
         logger.exception(f"[private_companion] agent 工具发送日程自拍失败: {e!r}")
-        return {"success": False, "error": str(e)[:160]}
+        return {"success": False, "error": format_user_error("自拍失败", e)}
 
 
 async def _send_local_image(bot: Bot, event: MessageEvent, image_path) -> None:
@@ -436,11 +441,8 @@ async def handle_companion(matcher: Matcher, event: MessageEvent, bot: Bot, arg:
             await _send_local_image(bot, event, image_path)
             await finish_with(matcher, message="✅ 自拍已发送")
         except Exception as e:
-            if is_rate_limit_error(e):
-                logger.warning("[private_companion] 自拍生成失败：请求过于频繁")
-                await finish_with(matcher, message="自拍失败：请求过于频繁，请稍后再试")
             logger.exception(f"[private_companion] 自拍生成/发送失败: {e!r}")
-            await finish_with(matcher, message=f"❌ 自拍失败: {str(e)[:120]}")
+            await finish_with(matcher, message=f"❌ {format_user_error('自拍失败', e)}")
 
     # ---- 人设图 ----
     elif action == "人设图":

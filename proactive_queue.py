@@ -13,6 +13,27 @@ def redact_error(text: str) -> str:
     return redacted[:120]
 
 
+def _looks_rate_limit(exc) -> bool:
+    code = getattr(exc, "status_code", None) or getattr(exc, "status", None)
+    if code == 429:
+        return True
+    resp = getattr(exc, "response", None)
+    if getattr(resp, "status_code", None) == 429:
+        return True
+    return "429" in str(exc)
+
+
+def format_user_error(prefix: str, exc) -> str:
+    if _looks_rate_limit(exc):
+        return f"{prefix}：请求过于频繁，请稍后再试"
+    return f"{prefix}：{redact_error(str(exc))}"
+
+
+def decide_queue_retry(should_send_ok: bool, item: dict) -> str:
+    _ = item
+    return "send" if should_send_ok else "requeue"
+
+
 def enqueue(queue: list, item: dict, now: float, ttl_seconds: int = 3600) -> list:
     user_id = item["user_id"]
     kind = item["kind"]
