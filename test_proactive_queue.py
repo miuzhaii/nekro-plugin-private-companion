@@ -1,6 +1,7 @@
 import unittest
+from pathlib import Path
 
-from proactive_queue import enqueue, pop_due, redact_error
+from proactive_queue import enqueue, format_user_error, pop_due, redact_error
 
 
 USER = "12435768"
@@ -60,6 +61,26 @@ class TestRedactError(unittest.TestCase):
         self.assertNotIn("1.2.3.4", out)
 
 
+class TestFormatUserError(unittest.TestCase):
+    def test_user_facing_formatter_does_not_leak_url_or_ip(self):
+        msg = format_user_error("自拍失败", Exception("boom https://10.0.0.8:8000/v1/media 10.0.0.8"))
+        self.assertNotIn("http", msg)
+        self.assertNotIn("10.0.0.8", msg)
+        self.assertNotIn("evil.example", msg)
+        self.assertIn("自拍失败", msg)
+        self.assertIn("「[链接已隐藏]」", msg)
+        self.assertIn("「[地址已隐藏]」", msg)
+
+    def test_rate_limit_uses_chinese_retry_copy(self):
+        class RateLimit(Exception):
+            status_code = 429
+
+        msg = format_user_error("自拍失败", RateLimit("HTTP 429 https://evil.example/x"))
+        self.assertEqual(msg, "自拍失败：请求过于频繁，请稍后再试")
+        self.assertNotIn("http", msg)
+        self.assertNotIn("evil", msg)
+
+
 class TestEnqueueStoresRedactedError(unittest.TestCase):
     def test_enqueue_stores_redacted_error_never_raw_url(self):
         q = []
@@ -72,6 +93,14 @@ class TestEnqueueStoresRedactedError(unittest.TestCase):
         self.assertNotIn("10.0.0.1", stored)
         self.assertIn("「[链接已隐藏]」", stored)
         self.assertIn("「[地址已隐藏]」", stored)
+
+
+class TestHandlersUseFormatUserError(unittest.TestCase):
+    def test_handlers_source_uses_format_user_error_not_raw_exc(self):
+        src = Path(__file__).resolve().parent.joinpath("handlers.py").read_text(encoding="utf-8")
+        self.assertIn("format_user_error", src)
+        self.assertNotIn('message=f"❌ 自拍失败: {str(e)[:120]}"', src)
+        self.assertNotIn('{"success": False, "error": str(e)[:160]}', src)
 
 
 if __name__ == "__main__":

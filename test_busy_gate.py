@@ -43,6 +43,13 @@ class TestBusyGate(unittest.TestCase):
         self.assertFalse(should_delay_passive_reply("午睡", "在干嘛"))
         self.assertFalse(should_delay_passive_reply("摸鱼", "你好"))
 
+    def test_handlers_source_wires_should_delay_passive_reply(self):
+        from pathlib import Path
+
+        src = (Path(__file__).resolve().parent / "handlers.py").read_text(encoding="utf-8")
+        self.assertIn("should_delay_passive_reply", src)
+        self.assertIn("on_user_message_activity", src)
+
 
 if __name__ == "__main__":
     unittest.main()
