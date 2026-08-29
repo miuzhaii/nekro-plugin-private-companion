@@ -26,7 +26,9 @@ docker restart nekro_agent
 
 > ⚠️ 目录名必须是 `private_companion`。重启后在 **WebUI → 插件管理** 中启用本插件（新插件默认禁用，启用后路由才会挂载）。
 
-无额外依赖：只使用 nekro-agent 容器内置库。
+无额外 Python/第三方插件依赖：只使用 nekro-agent 容器内置库。
+
+日程自拍（可选，默认关闭）走 Nekro 已配置的**绘图模型组**（`SELFIE_MODEL_GROUP`），通过本插件内置的 `chat/completions` 出图，**不需要**安装 [magic_draw](https://github.com/KroMiose/nekro-plugin-magic-draw) 或其它绘图插件。开启 `SELFIE_ENABLED` 前请先在插件配置里选好绘图模型组。
 
 ## ⚙️ 配置（WebUI → 插件管理 → 私人陪伴）
 
@@ -40,6 +42,7 @@ docker restart nekro_agent
 | `INJECT_SCOPE` | 状态注入范围：所有会话 / 仅陪伴对象私聊 |
 | `DIARY_TIME` | 每天写日记的时间（默认 23:10） |
 | `DAILY_TOKEN_LIMIT` | 插件内部 LLM 每日 token 预算 |
+| `SELFIE_ENABLED` / `SELFIE_MODEL_GROUP` | 可选日程自拍；启用后必须选择 Nekro 绘图模型组 |
 
 ## 📝 命令（`/陪伴`，管理员或陪伴对象本人可用）
 

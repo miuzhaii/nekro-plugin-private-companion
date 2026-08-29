@@ -121,8 +121,8 @@ class CompanionConfig(ConfigBase):
     SELFIE_ENABLED: bool = Field(default=False, title="启用日程自拍生成")
     SELFIE_MODEL_GROUP: str = Field(
         default="",
-        title="自拍图片模型组（绘图模型组，留空回退 z_img_draw）",
-        description="选择 Nekro 的绘图(draw)模型组；留空时回退使用 z_img_draw 插件配置",
+        title="自拍图片模型组（绘图模型组）",
+        description="选择 Nekro 已配置的绘图(draw)模型组。启用日程自拍时必填；不依赖 magic_draw / z_img_draw 等第三方插件",
         json_schema_extra=DRAW_MODEL_GROUP_REF,
     )
     SELFIE_RETRIES: int = Field(default=1, title="自拍生成失败重试次数", ge=0, le=5)
