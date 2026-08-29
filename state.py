@@ -14,6 +14,9 @@ from typing import List, Optional, Tuple
 
 from nekro_agent.api.core import logger
 
+from . import core
+from . import day_card as dc
+from . import plan_diversity as pd
 from .core import (
     get_bot_state,
     get_persona_prompt,
@@ -223,6 +226,19 @@ async def ensure_daily_state() -> dict:
 # ============ 日程生成 ============
 
 
+def _events_from_plan_payload(payload: dict) -> list:
+    events = []
+    for item in payload.get("events") or []:
+        if not isinstance(item, dict):
+            continue
+        window = _normalize_window(str(item.get("window") or item.get("time") or ""))
+        activity = _single_line(item.get("activity") or item.get("event"), 120)
+        if not window or not _WINDOW_RE.match(window) or not activity:
+            continue
+        events.append({"window": window, "activity": activity, "mood": _single_line(item.get("mood"), 24)})
+    return events
+
+
 async def generate_daily_plan(force: bool = False) -> dict:
     """LLM 生成今日日程；失败兜底为通用居家日程"""
     cfg = get_config()
@@ -236,6 +252,23 @@ async def generate_daily_plan(force: bool = False) -> dict:
     dream = bot_state.get("dream", {})
     dream_mood = _single_line(dream.get("mood"), 20) if dream.get("date") == today_key() else ""
 
+    if getattr(cfg, "DAY_CARD_ENABLED", True):
+        hist = await core.get_day_card_history()
+        existing = bot_state.get("day_card") if isinstance(bot_state.get("day_card"), dict) else None
+        if existing and existing.get("date") == today_key() and existing.get("scene"):
+            card = existing
+        else:
+            card = dc.draw_day_card(hist, date_key=today_key())
+            dc.remember_card(hist, card)
+            await core.save_day_card_history(hist)
+    else:
+        card = None
+
+    avoid = pd.format_avoid_block(
+        pd.recent_activity_lines(bot_state.get("recent_plans") or [], limit_days=3)
+    )
+    card_block = dc.format_card_for_prompt(card) if card else ""
+
     system_prompt = (
         "你是一个拟人化 AI 的「生活日程生成器」。你要为下面这个角色安排今天一整天的真实生活，"
         "让她像一个真实存在的人在过日子，而不是在执行模板。\n"
@@ -248,6 +281,9 @@ async def generate_daily_plan(force: bool = False) -> dict:
 {f'日程风格提示：{cfg.PLAN_STYLE_HINT}' if cfg.PLAN_STYLE_HINT.strip() else ''}
 {f'昨天日记摘要（顺势衔接，别照抄）：{diary_hint}' if diary_hint else ''}
 {f'今早醒来的情绪（让上午的节奏受它一点影响）：{dream_mood}' if dream_mood else ''}
+{card_block}
+{avoid if avoid else ''}
+禁止把今天写成上课+写代码的模板日；若场景不是学习/上班，就不要硬塞上课开会。
 
 【要求】
 1. 安排 5-8 个时间段，覆盖完整 24 小时（包括睡眠段），window 用 HH:MM-HH:MM，前后衔接不留大空洞。
@@ -261,26 +297,31 @@ async def generate_daily_plan(force: bool = False) -> dict:
 只输出纯 JSON，不要 Markdown，不要解释：
 {{"summary": "一句话概括今天", "events": [{{"window": "09:00-11:30", "activity": "具体在做什么", "mood": "心情"}}]}}"""
 
+    def _plan_from_raw(raw_text: Optional[str]) -> Optional[dict]:
+        if not raw_text:
+            return None
+        payload = parse_json_loose(raw_text, expect="object")
+        if not isinstance(payload, dict):
+            return None
+        events = _events_from_plan_payload(payload)
+        if len(events) < 3:
+            return None
+        return {
+            "summary": _single_line(payload.get("summary"), 80) or "普通的一天",
+            "events": events[:10],
+            "generated_at": now_ts(),
+        }
+
     plan: Optional[dict] = None
     raw = await llm_call(prompt, system_prompt=system_prompt, task="daily_plan")
-    if raw:
-        payload = parse_json_loose(raw, expect="object")
-        if isinstance(payload, dict):
-            events = []
-            for item in payload.get("events") or []:
-                if not isinstance(item, dict):
-                    continue
-                window = _normalize_window(str(item.get("window") or item.get("time") or ""))
-                activity = _single_line(item.get("activity") or item.get("event"), 120)
-                if not window or not _WINDOW_RE.match(window) or not activity:
-                    continue
-                events.append({"window": window, "activity": activity, "mood": _single_line(item.get("mood"), 24)})
-            if len(events) >= 3:
-                plan = {
-                    "summary": _single_line(payload.get("summary"), 80) or "普通的一天",
-                    "events": events[:10],
-                    "generated_at": now_ts(),
-                }
+    plan = _plan_from_raw(raw)
+    if plan is not None and pd.looks_like_template_day(plan["events"]) and len(plan["events"]) >= 3:
+        logger.warning("[private_companion] 日程像模板日，重抽一次")
+        retry_prompt = prompt + "\n上次结果是模板日，必须改写"
+        raw_retry = await llm_call(retry_prompt, system_prompt=system_prompt, task="daily_plan")
+        retried = _plan_from_raw(raw_retry)
+        if retried is not None:
+            plan = retried
     if plan is None:
         logger.warning("[private_companion] 日程生成失败，使用兜底居家日程")
         plan = {
@@ -290,6 +331,10 @@ async def generate_daily_plan(force: bool = False) -> dict:
         }
     bot_state = await get_bot_state()
     bot_state["plan"] = plan
+    bot_state["day_card"] = card if card else bot_state.get("day_card")
+    recent = list(bot_state.get("recent_plans") or [])
+    recent.append({"date": today_key(), "events": plan["events"]})
+    bot_state["recent_plans"] = recent[-7:]
     await save_bot_state(bot_state)
     for hook in list(_after_daily_plan_hooks):
         try:
