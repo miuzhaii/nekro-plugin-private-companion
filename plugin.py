@@ -91,6 +91,19 @@ class CompanionConfig(ConfigBase):
         title="启用每日人生卡",
         description="每天抽一张场景+两件事件再生成日程，减少上课/写代码复读。",
     )
+
+    # ---------- 日程图 ----------
+    RENDERER_URL: str = Field(
+        default="http://nekro_html2img:3000",
+        title="HTML 渲染服务地址",
+        description="容器内 nekro_html2img 的 /screenshot 地址，用于把今日日程渲染成图；失败回退 Pillow",
+    )
+    RENDER_TIMEOUT: int = Field(default=60, ge=10, le=180, title="日程图渲染超时（秒）")
+    SCHEDULE_CARD_ENABLED: bool = Field(
+        default=True,
+        title="启用日程图卡",
+        description="/陪伴 日程生成 时渲染 HTML 日程图；关闭则只生成文本日程",
+    )
     DIARY_TIME: str = Field(
         default="23:10",
         title="日记生成时间",
